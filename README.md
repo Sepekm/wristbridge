@@ -63,13 +63,19 @@ Mac, no Xcode, no developer account, no subscription.
 | Android notifications on your wrist | Yes, per-app, a few seconds' latency |
 | Notification text, sender, app name | Yes |
 | Works with the iPhone off / nonexistent | Yes — that's the whole design |
-| Replying from the watch | No |
+| **Replying from the watch** | **Yes** — see below |
 | Health data from watch → phone | No. That needs code running on the watch. |
+| Heart rate, ECG, sleep, workouts | No. Same reason. |
 | Controlling the phone from the watch | No |
 
-It is a one-way notification bridge. That's a real fraction of what a paired
-watch does, not all of it, and I'd rather say so up front than have you find out
-after installing.
+Anything that reads the watch's *sensors* is out of reach, because only code
+running on watchOS can touch HealthKit. Getting code onto the watch needs a Mac
+within Bluetooth range, and — per Apple's own developer forums — an iPhone
+plugged into that Mac before Developer Mode will even appear on the watch. That
+is the honest boundary, and it is not one cleverness crosses.
+
+Everything on the Android side of that line is fair game, which is why replies
+work.
 
 ### The one prerequisite I can't work around
 
@@ -106,6 +112,31 @@ notification rather than mail:
 Nothing passes through any server but Apple's. There is no Wristbridge backend,
 no account, and no telemetry. Your credential is encrypted with an Android
 Keystore key that cannot leave the device.
+
+## Replying from your wrist
+
+Android exposes a notification's **Reply** button to other devices as a
+`RemoteInput` on a `PendingIntent` — it is the exact mechanism a Wear OS watch
+uses to answer a message. Wristbridge holds onto it.
+
+```
+Reply on the watch's Mail app
+        ↓  In-Reply-To: <token@wristbridge.local>
+   iCloud IMAP, polled
+        ↓  token → the original notification
+   RemoteInput fired
+        ↓
+   Message sent from Signal / WhatsApp / SMS, as if typed on the phone
+```
+
+Turn it on in **Setup → Reply from your wrist**. Two honest caveats:
+
+- It keeps a **silent ongoing notification** in your shade. The poll has to run
+  as a foreground service, because Android defers background work far longer
+  than a reply can usefully wait.
+- A reply only works while the **original notification still exists** on the
+  phone. Swipe it away and Android revokes the reply permission with it. The
+  Activity tab tells you when that's what happened.
 
 ---
 
@@ -213,21 +244,33 @@ app/src/main/java/dev/wristbridge/
 │   └── Settings.kt           All configuration, one place
 ├── relay/
 │   ├── Smtp.kt               Dependency-free SMTP + MIME
+│   ├── Imap.kt               Dependency-free IMAP, for the reply channel
+│   ├── MimeText.kt           Pulls the written reply out of a mail body
 │   ├── NotificationMapper.kt Notification → mail shaped for a watch face
 │   ├── RelayListenerService.kt  Filtering, de-dupe, rate limit, retry
+│   ├── ReplyRegistry.kt      Holds each notification's RemoteInput action
+│   ├── ReplyPollService.kt   Watches iCloud for replies
 │   └── RelayLog.kt           In-memory activity log (never written to disk)
 └── ui/                       Compose UI
+```
+
+The mail parsing is covered by unit tests (`app/src/test/`) built from real
+IMAP FETCH framing, since it can't be exercised against a live mailbox:
+
+```bash
+./gradlew :app:testDebugUnitTest
 ```
 
 ---
 
 ## Where this could go further
 
-- **Reply channel.** Poll iCloud over IMAP for replies sent from the watch's
-  Mail app and turn them into actions on the phone. Genuinely doable with
-  Android-side code only; it's the obvious next feature.
 - **Calendar.** Push Android calendar events to iCloud over CalDAV so they
-  appear on the watch face.
+  appear on the watch face and in complications. Android-side only, so it is
+  genuinely reachable — the next thing worth building.
+- **Reminders.** Same channel, as CalDAV VTODOs.
+- **IMAP IDLE** instead of polling, to drop reply latency to near-instant and
+  retire the foreground service.
 - **The full bridge.** If you ever get access to a Mac, the watchOS half —
   BLE GATT to the Android app, health data flowing back — becomes possible, and
   the Android side here is already the right shape to talk to it.

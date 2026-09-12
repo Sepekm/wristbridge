@@ -71,7 +71,12 @@ object NotificationMapper {
             ?.joinToString("\n")
     }
 
-    fun toMail(item: Extracted, from: String, to: String): OutgoingMail {
+    fun toMail(
+        item: Extracted,
+        from: String,
+        to: String,
+        replyToken: String? = null,
+    ): OutgoingMail {
         // Sender line: "Signal · Alice" reads correctly on the wrist even when
         // watchOS truncates it, because the app name comes first.
         val sender = if (item.title.isNotEmpty()) {
@@ -92,6 +97,10 @@ object NotificationMapper {
                 if (isNotEmpty()) appendLine()
                 appendLine(item.text)
             }
+            if (replyToken != null) {
+                appendLine()
+                appendLine("Reply to this mail and your answer is sent back through ${item.appLabel}.")
+            }
             appendLine()
             appendLine("— ${item.appLabel} at ${TIME_FORMAT.format(item.postedAt)}")
             append("via Wristbridge (${item.packageName})")
@@ -104,6 +113,7 @@ object NotificationMapper {
             subject = subject.ifBlank { item.appLabel },
             body = body,
             sentAt = item.postedAt,
+            replyToken = replyToken,
         )
     }
 

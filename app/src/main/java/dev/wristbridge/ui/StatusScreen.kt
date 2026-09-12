@@ -15,9 +15,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.wristbridge.data.Settings
 import dev.wristbridge.relay.RelayLog
+import dev.wristbridge.relay.ReplyPollService
 
 @Composable
 fun StatusScreen(
@@ -30,6 +32,7 @@ fun StatusScreen(
     onGoToSetup: () -> Unit,
     onGoToApps: () -> Unit,
 ) {
+    val context = LocalContext.current
     val sentCount by RelayLog.sentCount.collectAsState()
     val ready = notificationAccess && snapshot.isConfigured && snapshot.relayedPackages.isNotEmpty()
 
@@ -51,7 +54,11 @@ fun StatusScreen(
                     Switch(
                         checked = snapshot.relayEnabled,
                         enabled = ready,
-                        onCheckedChange = settings::setRelayEnabled,
+                        onCheckedChange = {
+                            settings.setRelayEnabled(it)
+                            // The reply poller only runs while the relay does.
+                            ReplyPollService.sync(context)
+                        },
                     )
                 },
             )

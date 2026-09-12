@@ -30,6 +30,8 @@ class Settings private constructor(context: Context) {
         val maxPerHour: Int,
         val includeOngoing: Boolean,
         val respectLocalOnly: Boolean,
+        val replyChannelEnabled: Boolean,
+        val replyPollSeconds: Int,
     ) {
         /** The address mail is delivered to; defaults to the account itself. */
         val effectiveDestination: String get() = destination.ifBlank { account }
@@ -72,6 +74,12 @@ class Settings private constructor(context: Context) {
 
     fun setRespectLocalOnly(value: Boolean) = edit { putBoolean(KEY_LOCAL_ONLY, value) }
 
+    fun setReplyChannelEnabled(value: Boolean) = edit { putBoolean(KEY_REPLY, value) }
+
+    fun setReplyPollSeconds(value: Int) = edit {
+        putInt(KEY_REPLY_POLL, value.coerceIn(15, 900))
+    }
+
     private fun edit(block: SharedPreferences.Editor.() -> Unit) {
         prefs.edit().apply(block).apply()
         _state.value = readSnapshot()
@@ -87,6 +95,8 @@ class Settings private constructor(context: Context) {
         maxPerHour = prefs.getInt(KEY_MAX_PER_HOUR, DEFAULT_MAX_PER_HOUR),
         includeOngoing = prefs.getBoolean(KEY_ONGOING, false),
         respectLocalOnly = prefs.getBoolean(KEY_LOCAL_ONLY, true),
+        replyChannelEnabled = prefs.getBoolean(KEY_REPLY, false),
+        replyPollSeconds = prefs.getInt(KEY_REPLY_POLL, DEFAULT_REPLY_POLL_SECONDS),
     )
 
     companion object {
@@ -99,6 +109,14 @@ class Settings private constructor(context: Context) {
         private const val KEY_MAX_PER_HOUR = "max_per_hour"
         private const val KEY_ONGOING = "include_ongoing"
         private const val KEY_LOCAL_ONLY = "respect_local_only"
+        private const val KEY_REPLY = "reply_channel"
+        private const val KEY_REPLY_POLL = "reply_poll_seconds"
+
+        /**
+         * How often to check iCloud for replies. Every poll is a TLS handshake,
+         * so this trades battery against how long a reply sits before sending.
+         */
+        const val DEFAULT_REPLY_POLL_SECONDS = 60
 
         /**
          * Chat apps repost a notification on every incoming message in a thread.

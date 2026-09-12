@@ -4,6 +4,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- The reply channel polls iCloud on a timer, which has to be foreground
+         work: deferred background execution would make replies arrive late
+         enough to be useless. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!--
       QUERY_ALL_PACKAGES is used only to render the on-device app list you pick
       relayed apps from. Nothing about the package list leaves the device.
@@ -45,6 +52,11 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <service
+            android:name=".relay.ReplyPollService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
     </application>
 

@@ -36,6 +36,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import dev.wristbridge.data.Settings
 import dev.wristbridge.relay.OutgoingMail
 import dev.wristbridge.relay.RelayListenerService
+import dev.wristbridge.relay.ReplyPollService
 import dev.wristbridge.relay.SmtpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -183,6 +184,44 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
                     "alias here so relayed notifications stay out of their main inbox — " +
                     "the watch still shows them as long as the alias is on the same account."
             )
+        }
+
+        SectionCard(title = "Reply from your wrist") {
+            Hint(
+                "Android exposes a notification's Reply button to other devices — " +
+                    "it is how a Wear OS watch answers a message. Wristbridge holds " +
+                    "onto it, watches iCloud for your reply, and sends your answer " +
+                    "back through the original app."
+            )
+            ToggleSetting(
+                label = "Enable reply channel",
+                detail = "Reply to the mail on your watch and it goes out as a normal " +
+                    "message from the app it came from.",
+                checked = snapshot.replyChannelEnabled,
+                onCheckedChange = {
+                    settings.setReplyChannelEnabled(it)
+                    ReplyPollService.sync(context)
+                },
+            )
+            if (snapshot.replyChannelEnabled) {
+                NumberSetting(
+                    label = "Check for replies every",
+                    suffix = "seconds",
+                    value = snapshot.replyPollSeconds,
+                    onValueChange = {
+                        settings.setReplyPollSeconds(it)
+                        ReplyPollService.sync(context)
+                    },
+                    steps = listOf(30, 60, 120, 300),
+                )
+                Hint(
+                    "Two honest caveats. This keeps a quiet ongoing notification in " +
+                        "your shade, because the poll has to run in the foreground to " +
+                        "be timely. And a reply only works while the original " +
+                        "notification still exists on the phone — swipe it away and " +
+                        "Android revokes the reply permission with it."
+                )
+            }
         }
 
         SectionCard(title = "Check it works") {

@@ -33,7 +33,13 @@ class RelayListenerService : NotificationListenerService() {
      * waiting item is dropped instead, which is the right trade for
      * notifications where freshness is the whole point.
      */
-    private val queue = Channel<NotificationMapper.Extracted>(capacity = 64)
+    private val queue = Channel<QueuedRelay>(capacity = 64)
+
+    /** A notification waiting to be sent, plus the token that lets it be replied to. */
+    private data class QueuedRelay(
+        val item: NotificationMapper.Extracted,
+        val replyToken: String?,
+    )
 
     private val settings by lazy { Settings.get(this) }
 
@@ -113,7 +119,15 @@ class RelayListenerService : NotificationListenerService() {
         lastRelayedAt[extracted.dedupeKey] = now
         recentSends.addLast(now)
 
-        val accepted = queue.trySend(extracted).isSuccess
+        // Registering has to happen here, while the live notification (and its
+        // reply PendingIntent) is still in hand — the queued copy is only data.
+        val replyToken = if (config.replyChannelEnabled) {
+            ReplyRegistry.register(notification, extracted.appLabel)
+        } else {
+            null
+        }
+
+        val accepted = queue.trySend(QueuedRelay(extracted, replyToken)).isSuccess
         if (!accepted) {
             RelayLog.record(RelayLog.Outcome.SKIPPED, extracted.appLabel, "Queue full")
         }
@@ -170,13 +184,13 @@ class RelayListenerService : NotificationListenerService() {
 
     private fun startConsumer() {
         scope.launch {
-            for (item in queue) {
-                deliver(item)
+            for (queued in queue) {
+                deliver(queued.item, queued.replyToken)
             }
         }
     }
 
-    private suspend fun deliver(item: NotificationMapper.Extracted) {
+    private suspend fun deliver(item: NotificationMapper.Extracted, replyToken: String?) {
         val config = settings.snapshot
         val password = settings.password()
         if (password == null) {
@@ -188,6 +202,7 @@ class RelayListenerService : NotificationListenerService() {
             item = item,
             from = config.account,
             to = config.effectiveDestination,
+            replyToken = replyToken,
         )
         val client = SmtpClient(
             host = ICLOUD_SMTP_HOST,
