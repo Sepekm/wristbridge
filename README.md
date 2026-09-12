@@ -44,8 +44,9 @@ it is the assumption the whole project rests on.
 to watch** button in Setup is for. If the mail reaches your wrist, everything
 else here works. If it does not, no amount of configuration will help.
 
-It is not instantaneous. Expect a short delay rather than the immediacy of a
-notification from a paired phone.
+It is not instantaneous. Measured at roughly **30 seconds** from the phone
+sending to the watch raising the alert, over home Wi-Fi. Fine for a message,
+useless for anything you need the same second it happens.
 
 So: Wristbridge relays your Android notifications into your own iCloud mailbox,
 and the watch pushes them to your wrist. Android-side code only. No Mac, no
