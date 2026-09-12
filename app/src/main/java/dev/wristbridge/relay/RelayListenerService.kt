@@ -206,6 +206,20 @@ class RelayListenerService : NotificationListenerService() {
             return
         }
 
+        // Only mail counts against Apple's allowance; anything already
+        // delivered over Bluetooth cost nothing.
+        val quota = SendQuota.get(this)
+        if (!quota.tryConsume(config.maxPerDay)) {
+            RelayLog.record(
+                RelayLog.Outcome.SKIPPED,
+                item.appLabel,
+                "Daily iCloud limit of ${config.maxPerDay} reached",
+                "Apple allows ${SendQuota.ICLOUD_DAILY_LIMIT} messages a day per account. " +
+                    "Raise the limit in Setup, or narrow which apps are relayed.",
+            )
+            return
+        }
+
         val mail = NotificationMapper.toMail(
             item = item,
             from = config.account,
@@ -237,6 +251,8 @@ class RelayListenerService : NotificationListenerService() {
             }
         }
 
+        // The message never reached Apple, so it should not count against the day.
+        quota.refund()
         RelayLog.record(
             RelayLog.Outcome.FAILED,
             item.appLabel,

@@ -248,6 +248,11 @@ deliberately conservative, and all of it is tunable in **Setup → Tuning**:
 - **Opt-in per app.** Nothing is forwarded until you choose it.
 - **Repeat collapsing** (20s default) — chat apps repost on every message.
 - **Hourly ceiling** (60 default) — a misbehaving app can't drain your battery.
+- **Daily ceiling** (300 default) — this one protects your Apple account, not
+  your battery. Apple allows 1,000 messages a day from an iCloud account and
+  soft-blocks accounts that look like bulk senders; since that is the same
+  account your real email uses, the default leaves a wide margin. Notifications
+  delivered over Bluetooth don't count, because they never touch Apple.
 - **Ongoing notifications skipped** — music players, downloads, navigation.
 - **`FLAG_LOCAL_ONLY` respected** — apps that ask not to be bridged aren't.
 

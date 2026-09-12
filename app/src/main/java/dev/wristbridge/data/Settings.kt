@@ -2,6 +2,7 @@ package dev.wristbridge.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import dev.wristbridge.relay.SendQuota
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -28,6 +29,7 @@ class Settings private constructor(context: Context) {
         val relayedPackages: Set<String>,
         val minQuietSeconds: Int,
         val maxPerHour: Int,
+        val maxPerDay: Int,
         val includeOngoing: Boolean,
         val respectLocalOnly: Boolean,
         val replyChannelEnabled: Boolean,
@@ -57,6 +59,16 @@ class Settings private constructor(context: Context) {
         else putString(KEY_PASSWORD, SecureStore.encrypt(normalized))
     }
 
+    /**
+     * Removes the stored credential and destroys the Keystore key that
+     * sealed it, so revoking the app-specific password on Apple's side has
+     * a counterpart here.
+     */
+    fun forgetPassword() {
+        edit { remove(KEY_PASSWORD) }
+        SecureStore.clear()
+    }
+
     fun setDestination(value: String) = edit { putString(KEY_DESTINATION, value.trim()) }
 
     fun setRelayEnabled(value: Boolean) = edit { putBoolean(KEY_ENABLED, value) }
@@ -70,6 +82,9 @@ class Settings private constructor(context: Context) {
     fun setMinQuietSeconds(value: Int) = edit { putInt(KEY_QUIET, value.coerceIn(0, 3600)) }
 
     fun setMaxPerHour(value: Int) = edit { putInt(KEY_MAX_PER_HOUR, value.coerceIn(1, 500)) }
+
+    /** Capped at Apple's published daily ceiling; see [dev.wristbridge.relay.SendQuota]. */
+    fun setMaxPerDay(value: Int) = edit { putInt(KEY_MAX_PER_DAY, value.coerceIn(10, 900)) }
 
     fun setIncludeOngoing(value: Boolean) = edit { putBoolean(KEY_ONGOING, value) }
 
@@ -96,6 +111,7 @@ class Settings private constructor(context: Context) {
         relayedPackages = prefs.getStringSet(KEY_PACKAGES, emptySet()).orEmpty().toSet(),
         minQuietSeconds = prefs.getInt(KEY_QUIET, DEFAULT_QUIET_SECONDS),
         maxPerHour = prefs.getInt(KEY_MAX_PER_HOUR, DEFAULT_MAX_PER_HOUR),
+        maxPerDay = prefs.getInt(KEY_MAX_PER_DAY, SendQuota.DEFAULT_MAX_PER_DAY),
         includeOngoing = prefs.getBoolean(KEY_ONGOING, false),
         respectLocalOnly = prefs.getBoolean(KEY_LOCAL_ONLY, true),
         replyChannelEnabled = prefs.getBoolean(KEY_REPLY, false),
@@ -111,6 +127,7 @@ class Settings private constructor(context: Context) {
         private const val KEY_PACKAGES = "packages"
         private const val KEY_QUIET = "quiet_seconds"
         private const val KEY_MAX_PER_HOUR = "max_per_hour"
+        private const val KEY_MAX_PER_DAY = "max_per_day"
         private const val KEY_ONGOING = "include_ongoing"
         private const val KEY_LOCAL_ONLY = "respect_local_only"
         private const val KEY_REPLY = "reply_channel"

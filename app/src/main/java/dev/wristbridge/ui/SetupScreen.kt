@@ -19,6 +19,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import dev.wristbridge.data.Settings
 import dev.wristbridge.relay.OutgoingMail
 import dev.wristbridge.relay.RelayListenerService
 import dev.wristbridge.relay.ReplyPollService
+import dev.wristbridge.relay.SendQuota
 import dev.wristbridge.relay.SmtpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -58,6 +60,7 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
     var destination by remember { mutableStateOf(snapshot.destination) }
     var revealPassword by remember { mutableStateOf(false) }
     var test by remember { mutableStateOf<TestState>(TestState.Idle) }
+    val usedToday by SendQuota.get(context).usedToday.collectAsState()
 
     /**
      * Runs a network check off the main thread and folds both success and the
@@ -164,8 +167,18 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
                         "stripped automatically."
                 }
             )
-            TextButton(onClick = { openUrl(context, "https://account.apple.com") }) {
-                Text("Open account.apple.com")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { openUrl(context, "https://account.apple.com") }) {
+                    Text("Open account.apple.com")
+                }
+                if (snapshot.hasPassword) {
+                    TextButton(
+                        onClick = {
+                            settings.forgetPassword()
+                            password = ""
+                        }
+                    ) { Text("Forget password") }
+                }
             }
         }
 
@@ -271,6 +284,19 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
                 value = snapshot.maxPerHour,
                 onValueChange = settings::setMaxPerHour,
                 steps = listOf(20, 60, 120, 250, 500),
+            )
+            NumberSetting(
+                label = "Maximum per day",
+                suffix = "messages",
+                value = snapshot.maxPerDay,
+                onValueChange = settings::setMaxPerDay,
+                steps = listOf(100, 300, 500, 900),
+            )
+            Hint(
+                "Apple allows ${SendQuota.ICLOUD_DAILY_LIMIT} messages a day from an " +
+                    "iCloud account, and soft-blocks accounts that look like bulk " +
+                    "senders. The default leaves plenty of room for your real email — " +
+                    "$usedToday used so far today."
             )
             ToggleSetting(
                 label = "Forward ongoing notifications",
