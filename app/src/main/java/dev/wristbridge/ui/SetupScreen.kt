@@ -143,10 +143,15 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
                     "sends mail as you, to you. Nothing passes through any server " +
                     "except Apple's."
             )
+            Hint(
+                "It must be your @icloud.com mail address, not whatever address you " +
+                    "sign in to Apple with. The two are often different, and an Apple " +
+                    "ID can exist with no mailbox behind it at all."
+            )
             OutlinedTextField(
                 value = account,
                 onValueChange = { account = it },
-                label = { Text("iCloud address") },
+                label = { Text("iCloud Mail address") },
                 placeholder = { Text("you@icloud.com") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),

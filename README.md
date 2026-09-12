@@ -34,15 +34,18 @@ Apple documents that to receive SMS or third-party push notifications on a
 cellular Apple Watch, [the paired iPhone must be powered on](https://support.apple.com/en-us/108300)
 and connected, though it need not be nearby.
 
-iCloud Mail appears to behave differently. Users report that iCloud Mail
-continues to work on the watch over Wi-Fi or cellular with the iPhone
-disconnected. Apple does not document this either way, and it is the assumption
-the whole project rests on.
+iCloud Mail behaves differently, and this has now been confirmed on real
+hardware: a relayed notification arrived on the watch face on its own, with the
+paired iPhone and every other Apple device powered off. Apple does not document
+the behaviour either way, so it remains undocumented rather than guaranteed, and
+it is the assumption the whole project rests on.
 
-**Treat it as unproven until you have tested it yourself.** That is exactly what
-the **Send to watch** button in Setup is for, and it takes about ten seconds.
-If the mail reaches your wrist, everything else here works. If it does not, no
-amount of configuration will help.
+**Confirm it on your own watch before relying on it.** That is what the **Send
+to watch** button in Setup is for. If the mail reaches your wrist, everything
+else here works. If it does not, no amount of configuration will help.
+
+It is not instantaneous. Expect a short delay rather than the immediacy of a
+notification from a paired phone.
 
 So: Wristbridge relays your Android notifications into your own iCloud mailbox,
 and the watch pushes them to your wrist. Android-side code only. No Mac, no
@@ -181,7 +184,29 @@ If the build cannot find your SDK, set `sdk.dir` in `local.properties`.
 1. Confirm the watch is activated and signed into iCloud.
 2. Connect it to Wi-Fi under **Settings > Wi-Fi** on the watch.
 3. Open the **Mail** app on the watch once, so it syncs.
-4. Under **Settings > Notifications > Mail**, check alerts are on, not silent.
+
+**4. Set Mail to alert you. This step is mandatory and easy to get wrong.**
+
+By default a watch mirrors its paired iPhone's notification settings. With no
+iPhone running there is nothing to mirror, so Mail arrives silently and you only
+find it by opening the Mail app. Delivery works; nothing tells you about it.
+
+On the iPhone the watch is paired to, open the **Watch** app, then
+**Notifications > Mail**, and switch it from *Mirror my iPhone* to **Custom**.
+
+Then choose **Allow Notifications**.
+
+Do not choose *Send to Notification Centre*. That option is silent by design: it
+files the message without a sound or a wrist alert, which looks identical to the
+problem you are trying to solve. Allow Notifications is the one that raises an
+alert.
+
+Custom settings live on the watch, so the iPhone can go back to being switched
+off afterwards.
+
+> If the watch is paired to an iPhone you no longer have, this screen is out of
+> reach. **Do not pair the watch to a different iPhone to get at it: that erases
+> the watch.**
 
 ### Generate an app-specific password
 

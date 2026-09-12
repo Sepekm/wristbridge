@@ -100,9 +100,17 @@ class SmtpClient(
 
     fun send(message: OutgoingMail) {
         session { s ->
-            s.command("MAIL FROM:<${sanitizeAddress(message.from)}>", 250)
+            try {
+                s.command("MAIL FROM:<${sanitizeAddress(message.from)}>", 250)
+            } catch (e: SmtpException) {
+                throw explainSenderRejection(e, message.from)
+            }
             for (recipient in message.to) {
-                s.command("RCPT TO:<${sanitizeAddress(recipient)}>", 250, 251)
+                try {
+                    s.command("RCPT TO:<${sanitizeAddress(recipient)}>", 250, 251)
+                } catch (e: SmtpException) {
+                    throw explainRecipientRejection(e, recipient)
+                }
             }
             s.command("DATA", 354)
             s.output.write(message.render().toByteArray(StandardCharsets.UTF_8))
@@ -111,6 +119,43 @@ class SmtpClient(
             s.expect(250)
             runCatching { s.command("QUIT", 221) }
         }
+    }
+
+    /**
+     * Turns a rejected recipient into the explanation it almost always needs.
+     *
+     * Reaching this point means the password was accepted, so the account is
+     * real. Apple saying the mailbox is not is the signature of an Apple ID
+     * that has never had iCloud Mail switched on: signing in to iCloud works,
+     * Photos and Drive work, and no mailbox exists behind the address.
+     */
+    private fun explainRecipientRejection(e: SmtpException, recipient: String): SmtpException {
+        if (e.code != 550) return e
+        return SmtpException(
+            "iCloud accepted your password but says there is no mailbox at " +
+                "$recipient.\n\n" +
+                "An Apple ID and an iCloud mailbox are separate things. Open " +
+                "icloud.com and look for Mail: if it offers to create an " +
+                "@icloud.com address, iCloud Mail has never been switched on for " +
+                "this account, and there is nothing to deliver to yet. Turn it on " +
+                "from an Apple device under Settings, iCloud, iCloud Mail, then use " +
+                "the @icloud.com address it gives you here.\n\n" +
+                "Server said: ${e.message}",
+            e.code,
+        )
+    }
+
+    /** The sender was refused, which usually means it is not an address this account owns. */
+    private fun explainSenderRejection(e: SmtpException, from: String): SmtpException {
+        if (e.code !in setOf(550, 553, 501)) return e
+        return SmtpException(
+            "iCloud will not send as $from.\n\n" +
+                "Apple only lets an account send from its own iCloud address or one " +
+                "of its aliases. If the address here is a third-party one that merely " +
+                "serves as your Apple ID, use your @icloud.com address instead.\n\n" +
+                "Server said: ${e.message}",
+            e.code,
+        )
     }
 
     private fun session(block: (Session) -> Unit) {
