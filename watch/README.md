@@ -1,37 +1,38 @@
 # Wristbridge for Apple Watch
 
-The watchOS half of the bridge. This is what unlocks everything the Android
-side cannot reach on its own — heart rate, sleep, workouts, and notifications
-that arrive instantly instead of as email.
+The watchOS half of the bridge. This is what reaches the data the Android side
+cannot: heart rate, sleep, workouts, and notifications that arrive instantly
+instead of as email.
 
 ## Read this before you spend an afternoon on it
 
-**A free Apple ID signs this for seven days.** After that the app stops
-launching and has to be reinstalled from the Mac. That is Apple's limit on free
-provisioning, not something the code can work around.
+**A free Apple ID signs this for seven days.** Apple's free Personal Team
+provisioning profiles expire seven days after they are issued, after which the
+app stops launching and has to be rebuilt and reinstalled from the Mac. That is
+Apple's limit, not something the code can work around.
 
-A **paid Apple Developer account ($99/year)** signs it for a year. That is the
-difference between a genuine one-time setup and a weekly chore, and it is worth
-knowing before you start rather than after.
+A **paid Apple Developer Program membership** signs it for a year. That is the
+difference between a one-time setup and a weekly chore, and it is worth knowing
+before you start rather than after.
 
-**The watch app is not a background service.** watchOS does not let a
-third-party app hold a Bluetooth connection open indefinitely in the
-background. In practice:
+**The watch app is not a background service.** It holds the Bluetooth link only
+while it is open, and does not attempt to keep it alive in the background. In
+practice:
 
 | | |
 |---|---|
-| Health sync | Works — open the app, tap Sync, it uploads what's new |
+| Health sync | Open the app and tap Sync; it uploads what is new |
 | Notifications over Bluetooth | While the watch app is open |
 | Replies over Bluetooth | While the watch app is open |
 | Notifications when the app is closed | Falls back to the iCloud Mail relay |
 
-So the watch app does not replace the mail relay; it adds the sensor half and
-makes things instant while you're looking at it. Leave the mail relay on.
+So the watch app does not replace the mail relay. It adds the sensor half and
+makes delivery instant while you are looking at it. Leave the mail relay on.
 
 ## What you need
 
 - A Mac with Xcode 15 or later
-- Your spare iPhone, **once** — see the Developer Mode step below
+- An iPhone, **once**, for the Developer Mode step below
 - The Apple Watch, activated and on the same Wi-Fi as the Mac
 
 ## Build and install
@@ -66,9 +67,9 @@ in, so there is no large machine-written file to review or merge.
 In Xcode, select the **WristbridgeWatch** target → **Signing & Capabilities**:
 
 - Tick **Automatically manage signing**
-- Pick your team (a personal Apple ID works, with the seven-day caveat above)
-- Change the bundle identifier if `dev.wristbridge.watch` is taken — it must be
-  unique across the App Store
+- Pick your team; a personal Apple ID works, with the seven-day caveat above
+- Change the bundle identifier if `dev.wristbridge.watch` is taken, since it
+  must be unique
 
 ### 4. Install onto the watch
 
@@ -78,10 +79,9 @@ In Xcode, select the **WristbridgeWatch** target → **Signing & Capabilities**:
    to appear the first time.
 3. Press Run.
 
-If the watch does not show up: keep it close to the Mac for Bluetooth but near
-the Wi-Fi access point too — the watch needs a stronger signal to associate
-than a phone does. Toggling Developer Mode off and on, then restarting the
-watch, resolves most of the rest.
+If the watch does not show up, keep it close to the Mac for Bluetooth and near
+the Wi-Fi access point as well. Toggling Developer Mode off and on, then
+restarting the watch, resolves most of the rest.
 
 ### 5. Pair it with the phone
 
@@ -106,17 +106,17 @@ watch, resolves most of the rest.
                                             └──────────────┘
 ```
 
-The phone is the peripheral and the watch is the central, because watchOS
-offers no `CBPeripheralManager` — a watch app can only ever be the one that
+The phone is the peripheral and the watch is the central, because watchOS does
+not offer `CBPeripheralManager`, so a watch app can only be the side that
 connects. Messages are UTF-8 JSON, split into chunks that fit the negotiated
-MTU; see [`Protocol.swift`](Sources/WristbridgeWatch/Protocol.swift) and its
+MTU. See [`Protocol.swift`](Sources/WristbridgeWatch/Protocol.swift) and its
 Kotlin counterpart, which must be kept in step.
 
 ## Files
 
 ```
 watch/
-├── project.yml                 XcodeGen spec — the project is generated
+├── project.yml                 XcodeGen spec; the project is generated
 ├── WristbridgeWatch.entitlements
 └── Sources/WristbridgeWatch/
     ├── WristbridgeWatchApp.swift  Entry point

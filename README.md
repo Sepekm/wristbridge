@@ -1,267 +1,259 @@
 # Wristbridge
 
 Android notifications on an Apple Watch, from a GrapheneOS Pixel, with no iPhone
-in the loop and nothing behind a paywall.
+in the loop.
 
----
+## Read this first
 
-## Read this first: what is and isn't possible
+### 1. You cannot pair an Apple Watch to an Android phone
 
-I looked into this properly before writing any code, and the answer has three
-parts. Two of them are bad news, and the third is the reason this app exists.
+Apple's own setup documentation requires an iPhone with the Watch app to pair
+and activate an Apple Watch, and there is no supported path that does not. No
+app, free or paid, changes that. Anything advertising otherwise is describing
+something narrower than it sounds.
 
-### 1. You cannot pair an Apple Watch to an Android phone. Ever.
+### 2. What bridging apps actually do
 
-This isn't a missing feature or a locked API — it's structural. Apple Watch
-setup runs an activation handshake against Apple's servers that is
-cryptographically bound to genuine Apple hardware: the signing keys live in the
-Secure Enclave of an iPhone and are certified by Apple's CA. Replicating that
-would mean forging Apple's device attestation, which is not a "trick", it's an
-unsolved cryptography problem.
+Since watchOS 6 an Apple Watch has its own App Store and can install
+[standalone apps](https://developer.apple.com/documentation/watchos-apps/creating-independent-watchos-apps)
+that run without an iPhone. Commercial bridges such as Merge are installed onto
+the watch this way, according to their own setup instructions, and pair with a
+companion Android app.
 
-So: **no app, free or paid, pairs an Apple Watch with a Pixel.** Anything
-advertising otherwise is describing something narrower than it sounds.
+The watch is never paired to Android at the OS level. It is an app-to-app
+bridge that sidesteps pairing entirely. The transport those apps use is not
+publicly documented, so this project does not guess at it.
 
-### 2. What Merge actually does — and why its paywall isn't hiding magic
+Building a watch app needs Swift, a Mac running Xcode, and an Apple Developer
+Program membership for signing that lasts longer than seven days. That is the
+real barrier, and no amount of work on the Android side removes it.
 
-Merge is legitimate, and it's cleverer than it first looks. Since watchOS 6, the
-Apple Watch has its own App Store and can install **standalone apps** that run
-without an iPhone. Merge ships a native watchOS app, and that app talks to their
-Android app over Bluetooth LE and a cloud relay.
+### 3. The seam this project uses
 
-The watch is never "paired" to Android at the OS level. It's an app-to-app
-bridge that sidesteps pairing entirely.
+Apple documents that to receive SMS or third-party push notifications on a
+cellular Apple Watch, [the paired iPhone must be powered on](https://support.apple.com/en-us/108300)
+and connected, though it need not be nearby.
 
-That's a real architecture — but it's one I can't hand you. Building the watch
-half requires Swift, a Mac running Xcode, and a $99/year Apple Developer
-account to get a provisioning profile that lasts longer than seven days. You're
-on Windows. That's the actual wall, and no amount of cleverness on the Android
-side climbs it.
+iCloud Mail appears to behave differently. Users report that iCloud Mail
+continues to work on the watch over Wi-Fi or cellular with the iPhone
+disconnected. Apple does not document this either way, and it is the assumption
+the whole project rests on.
 
-### 3. The seam that is left open
+**Treat it as unproven until you have tested it yourself.** That is exactly what
+the **Send to watch** button in Setup is for, and it takes about ten seconds.
+If the mail reaches your wrist, everything else here works. If it does not, no
+amount of configuration will help.
 
-While researching the above, one detail turned out to matter more than anything
-else. On an Apple Watch:
+So: Wristbridge relays your Android notifications into your own iCloud mailbox,
+and the watch pushes them to your wrist. Android-side code only. No Mac, no
+Xcode, no developer account, no subscription.
 
-- Third-party push notifications and iMessage **require the paired iPhone to be
-  powered on** somewhere with an internet connection. Not nearby — but on.
-- **iCloud Mail does not.** The watch maintains its own connection to iCloud
-  over Wi-Fi or cellular, and mail pushes to the wrist with the iPhone off
-  entirely.
+## What you get
 
-iCloud Mail is the one notification channel that survives with no iPhone
-anywhere in the picture. That's the seam.
+Wristbridge comes in two halves. The second is optional.
 
-**So Wristbridge relays your Android notifications into your own iCloud inbox,
-and your watch pushes them to your wrist.** It's Android-side code only — no
-Mac, no Xcode, no developer account, no subscription.
-
-### What you get, honestly
-
-Wristbridge comes in two halves, and the second one is optional.
-
-### Half one: the mail relay — no Mac, no iPhone, no developer account
+### Half one: the mail relay (no Mac, no iPhone, no developer account)
 
 | | |
 |---|---|
-| Android notifications on your wrist | Yes, per-app, a few seconds' latency |
+| Android notifications on your wrist | Yes, per app, a few seconds' latency |
 | Notification text, sender, app name | Yes |
-| Works with the iPhone off / nonexistent | Yes — that's the whole design |
+| Works with no iPhone involved | Yes, subject to the caveat above |
 | Replying from the watch | Yes, via the watch's Mail app |
 | Always on, app closed, screen off | Yes |
-| Health data from the watch | No — HealthKit is unreachable from Android |
+| Health data from the watch | No. HealthKit is unreachable from Android. |
 
-### Half two: the watchOS app — needs a Mac, and an iPhone once
+### Half two: the watchOS app (needs a Mac, and an iPhone once)
 
 | | |
 |---|---|
 | Heart rate, resting HR, blood oxygen | Yes |
 | Steps, active energy, exercise, stand | Yes |
 | Sleep stages and workouts | Yes |
-| Notifications, instantly, no email | Yes, while the watch app is open |
-| Replying without touching Mail | Yes, while the watch app is open |
-| Running in the background | **No** — watchOS will not hold the link open |
+| Notifications instantly, no email | While the watch app is open |
+| Replying without touching Mail | While the watch app is open |
+| Running in the background | No. This app does not attempt it. |
 
-The two are complementary, not alternatives. The watch app adds the sensor half
-and makes things instant while you're looking at it; the mail relay stays the
-always-on path, because watchOS does not let a third-party app keep a Bluetooth
-connection alive in the background. Leave both on.
+The two are complementary rather than alternatives. The watch app adds the
+sensor half and makes delivery instant while you are looking at it. The mail
+relay stays the always-on path, because this implementation only runs the
+Bluetooth link while the watch app is in the foreground. Leave both on.
 
-ECG is the one thing still missing: Apple does not expose ECG waveforms to
-third-party apps at all, on any platform. Merge's ECG feature reads the
-*classification* result, not the trace.
+ECG is not implemented. HealthKit has exposed
+[`HKElectrocardiogram`](https://developer.apple.com/videos/play/wwdc2020/10182/)
+since iOS 14 and watchOS 7, so reading it is possible in principle, but a single
+recording is thousands of voltage samples and does not suit a Bluetooth link
+sized for short messages.
 
 Setting up half two is [`watch/README.md`](watch/README.md). Read the
-provisioning note there first — a free Apple ID signs the app for seven days,
-a paid account for a year, and that decides whether this is genuinely one-time.
+provisioning note there first: free signing lasts seven days, paid signing lasts
+a year, and that decides whether this is genuinely a one-time setup.
 
-### The one prerequisite I can't work around
+### The one prerequisite
 
 **Your Apple Watch must already be activated and signed into an iCloud account.**
 
-If it is — you used to have an iPhone, or you bought it set up — the mail relay
-needs nothing else, ever.
+If it is, because you used to have an iPhone or bought it set up, the mail relay
+needs nothing else.
 
-If it's factory-reset and showing a pairing screen, it is currently an
-expensive paperweight, and you need an iPhone **once** to activate it. This is
-true of Merge too. Nothing changes it.
-
----
+If it is factory-reset and showing a pairing screen, you need an iPhone once to
+activate it. This is true of commercial bridges too.
 
 ## How it works
 
 ```
 Android notification
-        ↓  NotificationListenerService
-   filter · de-duplicate · rate-limit
-        ↓  SMTP over TLS
+        |  NotificationListenerService
+   filter, de-duplicate, rate-limit
+        |  SMTP over TLS
    smtp.mail.me.com  (your account, your credentials)
-        ↓  Apple push
-   Apple Watch → Mail notification on your wrist
+        |  Apple push
+   Apple Watch: Mail notification on your wrist
 ```
 
 Each notification becomes one small email, shaped so it reads like a
 notification rather than mail:
 
-- **Sender line** → `Signal · Alice` (app name first, so it survives truncation)
-- **Subject** → the message text
-- **Body** → full text, timestamp, source app
+- **Sender line** becomes `Signal · Alice`, app name first so it survives
+  truncation on a small screen
+- **Subject** becomes the message text
+- **Body** carries the full text, a timestamp, and the source app
 
-Nothing passes through any server but Apple's. There is no Wristbridge backend,
-no account, and no telemetry. Your credential is encrypted with an Android
-Keystore key that cannot leave the device.
+There is no Wristbridge server, no account, and no telemetry. Your credential is
+encrypted with an Android Keystore key that cannot leave the device.
 
 ## Replying from your wrist
 
 Android exposes a notification's **Reply** button to other devices as a
-`RemoteInput` on a `PendingIntent` — it is the exact mechanism a Wear OS watch
-uses to answer a message. Wristbridge holds onto it.
+`RemoteInput` on a `PendingIntent`, the same mechanism a Wear OS watch uses.
+Wristbridge holds onto it.
 
 ```
-Reply on the watch's Mail app
-        ↓  In-Reply-To: <token@wristbridge.local>
+Reply in the watch's Mail app
+        |  In-Reply-To: <token@wristbridge.local>
    iCloud IMAP, polled
-        ↓  token → the original notification
+        |  token identifies the original notification
    RemoteInput fired
-        ↓
-   Message sent from Signal / WhatsApp / SMS, as if typed on the phone
+        |
+   Message sent from Signal, WhatsApp or SMS, as if typed on the phone
 ```
 
-Turn it on in **Setup → Reply from your wrist**. Two honest caveats:
+Turn it on in **Setup > Reply from your wrist**. Two caveats:
 
-- It keeps a **silent ongoing notification** in your shade. The poll has to run
-  as a foreground service, because Android defers background work far longer
-  than a reply can usefully wait.
-- A reply only works while the **original notification still exists** on the
-  phone. Swipe it away and Android revokes the reply permission with it. The
-  Activity tab tells you when that's what happened.
-
----
+- It keeps a silent ongoing notification in your shade. The poll runs as a
+  foreground service, because Android defers background work longer than a
+  reply can usefully wait.
+- A reply only works while the original notification still exists on the phone.
+  Swipe it away and Android revokes the reply permission with it. The Activity
+  tab tells you when that has happened.
 
 ## Getting the APK
 
-### Option A — build it in the cloud (no local tooling)
+### Option A: build it in the cloud, with no local tooling
 
-1. Push this folder to a GitHub repository.
-2. Open the **Actions** tab → **Build APK** → **Run workflow**.
-3. When it finishes, download the `wristbridge-apk` artifact (~2 MB).
-4. Install it on your Pixel. GrapheneOS will prompt for permission to install
-   from that source.
+1. Open the **Actions** tab, pick **Build APK**, then **Run workflow**.
+2. When it finishes, download the `wristbridge-apk` artifact, about 2 MB.
+3. Install it on your phone and allow installation from that source.
 
-The workflow is already at `.github/workflows/build-apk.yml`. It runs the unit
-tests before building, so a broken parser fails the run rather than shipping.
+The workflow runs the unit tests before building, so a broken parser fails the
+run rather than shipping.
 
-### Option B — build locally
+### Option B: build locally
 
-Needs a JDK (17–21) and the Android SDK with platform 35.
+Needs a JDK and the Android SDK with platform 35. Built and tested here with
+JDK 21; the Gradle and AGP versions pinned in this repo do not accept JDK 25.
 
 ```bash
 ./gradlew :app:assembleRelease
 ```
 
-The APK lands in `app/build/outputs/apk/release/app-release.apk`.
+The APK lands in `app/build/outputs/apk/release/app-release.apk`, signed with
+the debug key so a clean checkout produces something installable. Point the
+release `signingConfig` at your own keystore if you want to distribute it.
 
-It is signed with the debug key so a clean checkout builds something
-installable. That is fine for sideloading onto your own phone; point the
-release `signingConfig` at your own keystore if you ever want to distribute it.
-
-> Point `local.properties` at your SDK (`sdk.dir=...`) if the build can't find
-> it. JDK 22+ is too new for this Gradle/AGP pair — use 17 or 21.
-
----
+If the build cannot find your SDK, set `sdk.dir` in `local.properties`.
 
 ## Setting it up
 
 ### On your Apple Watch
 
 1. Confirm the watch is activated and signed into iCloud.
-2. Connect it to Wi-Fi: **Settings → Wi-Fi** on the watch.
+2. Connect it to Wi-Fi under **Settings > Wi-Fi** on the watch.
 3. Open the **Mail** app on the watch once, so it syncs.
-4. **Settings → Notifications → Mail** — make sure alerts are on, not silent.
+4. Under **Settings > Notifications > Mail**, check alerts are on, not silent.
 
 ### Generate an app-specific password
 
-Apple requires one for any non-Apple mail client.
+Apple requires an app-specific password for third-party mail clients when
+two-factor authentication is on.
 
-1. Go to [account.apple.com](https://account.apple.com) and sign in.
-2. **Sign-In and Security → App-Specific Passwords → Generate**.
+1. Sign in at [account.apple.com](https://account.apple.com).
+2. Go to **Sign-In and Security > App-Specific Passwords > Generate**.
 3. Copy it. Wristbridge strips the hyphens for you.
 
-This is **not** your Apple ID password — that one will be rejected.
+This is not your Apple ID password. That one will be rejected.
 
 ### In Wristbridge
 
 1. **Setup** tab: enter your iCloud address and the app-specific password.
-2. Tap **Test login**. If iCloud rejects it, the error from Apple's server is
-   shown verbatim so you know exactly what to fix.
-3. Tap **Send to watch**. Look at your wrist — this is the moment of truth.
+2. Tap **Test login**. If iCloud rejects it, the server's own error is shown
+   verbatim so you know what to fix.
+3. Tap **Send to watch**. This is the step that proves the whole approach.
 4. **Apps** tab: pick the apps to forward. Start with two or three.
-5. **Status** tab: grant notification access, then flip the relay on.
+5. **Status** tab: grant notification access, then turn the relay on.
 
-Also worth granting: unrestricted battery, from the Status tab. Without it
-Android may freeze the relay in the background and delay notifications.
+Also worth granting unrestricted battery from the Status tab, so Android does
+not freeze the relay in the background.
 
----
+## If the test mail does not reach your wrist
 
-## If the test mail doesn't reach your wrist
+Mail arriving in your inbox but not on your watch is a watch-side setting:
 
-The mail arriving in your inbox but not on your watch is the most likely
-failure, and it's a watch-side setting every time:
+- Mail notifications off on the watch, under **Settings > Notifications > Mail**
+- Watch not on Wi-Fi, since it needs its own connection
+- Notifications set to **Send to Notification Center**, which is silent by
+  design; switch to alerts
+- If none of those, try marking your own address as a **VIP** in Mail
 
-- **Mail notifications off on the watch** — Settings → Notifications → Mail.
-- **Watch not on Wi-Fi** — it needs its own connection.
-- **Notifications set to "Send to Notification Center"** — silent by design;
-  switch to alerts.
-- **Still nothing?** In Mail, mark your own address as a **VIP**. VIP mail
-  pushes far more reliably than ordinary inbox mail.
-
-If the mail never arrives at all, the problem is on the Android side and the
-**Activity** tab will say why, with Apple's own error text.
-
----
+If the mail never arrives at all, the problem is on the Android side, and the
+**Activity** tab shows Apple's own error text.
 
 ## Keeping your inbox usable
 
-Relaying every notification to an inbox floods it fast. The defaults are
-deliberately conservative, and all of it is tunable in **Setup → Tuning**:
+Relaying every notification to an inbox fills it quickly. The defaults are
+conservative and all of it is tunable under **Setup > Tuning**:
 
-- **Opt-in per app.** Nothing is forwarded until you choose it.
-- **Repeat collapsing** (20s default) — chat apps repost on every message.
-- **Hourly ceiling** (60 default) — a misbehaving app can't drain your battery.
-- **Daily ceiling** (300 default) — this one protects your Apple account, not
-  your battery. Apple allows 1,000 messages a day from an iCloud account and
-  soft-blocks accounts that look like bulk senders; since that is the same
-  account your real email uses, the default leaves a wide margin. Notifications
-  delivered over Bluetooth don't count, because they never touch Apple.
-- **Ongoing notifications skipped** — music players, downloads, navigation.
-- **`FLAG_LOCAL_ONLY` respected** — apps that ask not to be bridged aren't.
+- **Opt in per app.** Nothing is forwarded until you choose it.
+- **Repeat collapsing**, 20s by default, because chat apps repost on every
+  message in a thread.
+- **Hourly ceiling**, 60 by default, so a misbehaving app cannot drain the
+  battery.
+- **Daily ceiling**, 300 by default. This one protects your Apple account
+  rather than your battery: Apple limits an iCloud account to
+  [1,000 messages a day](https://support.apple.com/en-us/102198), and that is
+  the same account your real email uses. Notifications delivered over Bluetooth
+  do not count, because they never reach Apple.
+- **Ongoing notifications skipped**, such as music players and navigation.
+- **`FLAG_LOCAL_ONLY` respected**, so apps that ask not to be bridged are not.
 
 A tidy option: make a second iCloud alias, point **Deliver to** at it, and add a
-Mail rule on the Apple side keying off the `X-Wristbridge: 1` header every
-relayed message carries. Your main inbox stays clean, and the watch still
-notifies because the alias is on the same account.
+Mail rule keying off the `X-Wristbridge: 1` header that every relayed message
+carries. Your main inbox stays clean and the watch still notifies, because the
+alias is on the same account.
 
----
+## What it accesses
+
+- The app asks for an **app-specific password**, not your Apple ID password.
+  Apple lets you revoke these individually at
+  [account.apple.com](https://account.apple.com) without affecting anything
+  else, which is the clean way to cut the app off. Setup also has a **Forget
+  password** button for the copy held on the phone.
+- Exactly two files open a network socket, both to `*.mail.me.com`:
+  [Smtp.kt](app/src/main/java/dev/wristbridge/relay/Smtp.kt) for sending and
+  [Imap.kt](app/src/main/java/dev/wristbridge/relay/Imap.kt) for reading
+  replies. Searching the source for `Socket(` finds nothing else.
+- Notification contents are never written to disk. The Activity log is held in
+  memory and cleared when the process restarts.
 
 ## Project layout
 
@@ -271,14 +263,15 @@ app/src/main/java/dev/wristbridge/
 │   ├── SecureStore.kt        Keystore-backed AES-GCM for the credential
 │   └── Settings.kt           All configuration, one place
 ├── relay/
-│   ├── Smtp.kt               Dependency-free SMTP + MIME
+│   ├── Smtp.kt               Dependency-free SMTP and MIME
 │   ├── Imap.kt               Dependency-free IMAP, for the reply channel
 │   ├── MimeText.kt           Pulls the written reply out of a mail body
-│   ├── NotificationMapper.kt Notification → mail shaped for a watch face
+│   ├── NotificationMapper.kt Notification to mail, shaped for a watch face
 │   ├── RelayListenerService.kt  Filtering, de-dupe, rate limit, retry
 │   ├── ReplyRegistry.kt      Holds each notification's RemoteInput action
 │   ├── ReplyPollService.kt   Watches iCloud for replies
-│   └── RelayLog.kt           In-memory activity log (never written to disk)
+│   ├── SendQuota.kt          Keeps sending inside Apple's daily allowance
+│   └── RelayLog.kt           In-memory activity log, never written to disk
 ├── ble/
 │   ├── BleProtocol.kt        Wire format, mirrored in Protocol.swift
 │   └── BleLinkService.kt     GATT server the watch app connects to
@@ -286,56 +279,29 @@ app/src/main/java/dev/wristbridge/
 │   └── HealthStore.kt        Samples received from the watch
 └── ui/                       Compose UI
 
-watch/                        The watchOS app — see watch/README.md
+watch/                        The watchOS app; see watch/README.md
 ```
 
-The mail parsing is covered by unit tests (`app/src/test/`) built from real
-IMAP FETCH framing, since it can't be exercised against a live mailbox:
+The mail parsing is covered by unit tests in `app/src/test/`, built from real
+IMAP FETCH framing since it cannot be exercised against a live mailbox:
 
 ```bash
 ./gradlew :app:testDebugUnitTest
 ```
 
----
+## Licence
 
-## Licence, and what you're agreeing to
-
-MIT — see [LICENSE](LICENSE). Use it, fork it, sell it, whatever.
-
-In plain terms: **this is provided as-is, and you use it at your own risk.**
-It is a personal project, not a product. Nobody is on call if it breaks, loses
-a notification, or behaves in a way you didn't expect. That is not politeness —
-it is the actual legal position the MIT licence sets out, in the paragraph in
-capitals at the bottom of it.
-
-Two things worth understanding before you type a password into it:
-
-- The app asks for an **app-specific password**, not your Apple ID password.
-  Those are revocable one at a time at [account.apple.com](https://account.apple.com)
-  without touching anything else, and revoking one is the clean way to cut the
-  app off. There's a **Forget password** button in Setup for the phone's copy.
-- Your credential is sealed with a key held in the Android Keystore and never
-  leaves the device. There is no Wristbridge server, no account, and no
-  telemetry — traffic goes from your phone to Apple and nowhere else. You do
-  not have to take that on trust. Exactly two files in the codebase open a
-  network socket, both to `*.mail.me.com`:
-  [Smtp.kt](app/src/main/java/dev/wristbridge/relay/Smtp.kt) for sending and
-  [Imap.kt](app/src/main/java/dev/wristbridge/relay/Imap.kt) for reading
-  replies. Grep for `Socket(` and you will find nothing else.
+MIT. See [LICENSE](LICENSE).
 
 ## Where this could go further
 
-- **Health Connect.** Forward the samples the watch sends into Android's
-  Health Connect, so they show up in Fitbit, Google Fit and everything else on
-  the phone. Deliberately not done yet: getting the data off the watch was the
-  hard part, and this is mechanical once it flows.
+- **Health Connect.** Forward the samples the watch sends into Android's Health
+  Connect so they reach other apps on the phone. Not done yet: getting the data
+  off the watch was the hard part, and this is mechanical once it flows.
 - **Calendar and reminders.** Push Android events to iCloud over CalDAV so they
   appear on the watch face and in complications. Android-side only.
-- **IMAP IDLE** instead of polling, to drop reply latency to near-instant and
-  retire the reply channel's foreground service.
-- **A workout session** on the watch would keep the BLE link alive in the
-  background, which is how fitness apps do it. It costs real battery, so it
-  should be a deliberate toggle rather than the default.
-- **The full bridge.** If you ever get access to a Mac, the watchOS half —
-  BLE GATT to the Android app, health data flowing back — becomes possible, and
-  the Android side here is already the right shape to talk to it.
+- **IMAP IDLE** instead of polling, to cut reply latency and retire the reply
+  channel's foreground service.
+- **ECG**, now that `HKElectrocardiogram` is known to be readable. The voltage
+  series is too large for the current Bluetooth framing, so it would need
+  chunked transfer or a summary rather than the full trace.

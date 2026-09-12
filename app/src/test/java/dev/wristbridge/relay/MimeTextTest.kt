@@ -24,7 +24,7 @@ class MimeTextTest {
             Content-Type: text/plain;
             	charset=utf-8
 
-            On my way=E2=80=94ten minutes.
+            On my way=E2=80=A6 ten minutes.
 
             > On 12 Sep 2026, at 14:03, Wristbridge wrote:
             > Are you coming?
@@ -34,7 +34,7 @@ class MimeTextTest {
             a0004 OK FETCH completed
         """.trimIndent()
 
-        assertEquals("On my way—ten minutes.", MimeText.extractPlainText(response))
+        assertEquals("On my way\u2026 ten minutes.", MimeText.extractPlainText(response))
     }
 
     @Test
@@ -116,11 +116,21 @@ class MimeTextTest {
         val text = """
             Got it.
 
-            — Signal at 14:03
-            via Wristbridge (org.thoughtcrime.securesms)
+            via Wristbridge: Signal at 14:03 (org.thoughtcrime.securesms)
         """.trimIndent()
 
         assertEquals("Got it.", MimeText.stripQuotedReply(text))
+    }
+
+    @Test
+    fun `keeps a reply that reads like an attribution line`() {
+        val text = """
+            Sent from work at 17:30, see you then.
+
+            via Wristbridge: Signal at 14:03 (org.thoughtcrime.securesms)
+        """.trimIndent()
+
+        assertEquals("Sent from work at 17:30, see you then.", MimeText.stripQuotedReply(text))
     }
 
     @Test

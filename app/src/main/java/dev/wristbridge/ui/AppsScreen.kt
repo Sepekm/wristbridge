@@ -48,7 +48,7 @@ fun AppsScreen(settings: Settings, snapshot: Settings.Snapshot) {
         SectionCard(title = "Apps to forward") {
             Hint(
                 "Start narrow. Pick the two or three apps you actually want on your " +
-                    "wrist — every selected app sends mail, and a chatty one will make " +
+                    "wrist. Every selected app sends mail, and a chatty one will make " +
                     "itself known quickly."
             )
             OutlinedTextField(
@@ -111,7 +111,7 @@ fun AppsScreen(settings: Settings, snapshot: Settings.Snapshot) {
 }
 
 /**
- * Lists apps the user could plausibly want forwarded — anything with a launcher
+ * Lists apps the user could plausibly want forwarded: anything with a launcher
  * entry. Framework packages without a launcher icon are excluded because they
  * would bury the list without ever producing a notification worth relaying.
  */

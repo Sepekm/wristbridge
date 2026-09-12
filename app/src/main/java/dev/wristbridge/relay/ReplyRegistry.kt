@@ -14,7 +14,7 @@ import java.util.UUID
  * written on the watch can be pushed back into the app that sent it.
  *
  * Android exposes a notification's "Reply" button as a [RemoteInput] on a
- * [PendingIntent] — the same mechanism Wear OS uses. Holding onto that intent
+ * [PendingIntent], the same mechanism Wear OS uses. Holding onto that intent
  * lets the reply land in WhatsApp or Signal as if it were typed on the phone.
  *
  * The intent stays valid only while the notification is alive: dismiss it on

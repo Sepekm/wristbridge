@@ -129,7 +129,7 @@ class ReplyPollService : Service() {
                 RelayLog.Outcome.FAILED,
                 "Reply channel",
                 text.take(60),
-                "That conversation is no longer held in memory — the app restarted, " +
+                "That conversation is no longer held in memory: the app restarted, " +
                     "or the notification is over a day old.",
             )
             return

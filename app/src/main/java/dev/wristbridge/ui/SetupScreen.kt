@@ -110,7 +110,7 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
                     TestState.Done(
                         true,
                         if (sendMail) {
-                            "Sent. Check your wrist — it should arrive within a few seconds."
+                            "Sent. Check your wrist; it should arrive within a few seconds."
                         } else {
                             "iCloud accepted the login."
                         },
@@ -127,7 +127,7 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
         SectionCard(title = "iCloud account") {
             Hint(
                 "This is the account your Apple Watch is signed into. Wristbridge " +
-                    "sends mail as you, to you — nothing passes through any server " +
+                    "sends mail as you, to you. Nothing passes through any server " +
                     "except Apple's."
             )
             OutlinedTextField(
@@ -194,15 +194,15 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
             )
             Hint(
                 "Leave blank to send to yourself. Some people prefer a second iCloud " +
-                    "alias here so relayed notifications stay out of their main inbox — " +
-                    "the watch still shows them as long as the alias is on the same account."
+                    "alias here so relayed notifications stay out of their main inbox. " +
+                    "The watch still shows them as long as the alias is on the same account."
             )
         }
 
         SectionCard(title = "Reply from your wrist") {
             Hint(
-                "Android exposes a notification's Reply button to other devices — " +
-                    "it is how a Wear OS watch answers a message. Wristbridge holds " +
+                "Android exposes a notification's Reply button to other devices. " +
+                    "It is how a Wear OS watch answers a message. Wristbridge holds " +
                     "onto it, watches iCloud for your reply, and sends your answer " +
                     "back through the original app."
             )
@@ -231,7 +231,7 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
                     "Two honest caveats. This keeps a quiet ongoing notification in " +
                         "your shade, because the poll has to run in the foreground to " +
                         "be timely. And a reply only works while the original " +
-                        "notification still exists on the phone — swipe it away and " +
+                        "notification still exists on the phone. Swipe it away and " +
                         "Android revokes the reply permission with it."
                 )
             }
@@ -295,7 +295,7 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
             Hint(
                 "Apple allows ${SendQuota.ICLOUD_DAILY_LIMIT} messages a day from an " +
                     "iCloud account, and soft-blocks accounts that look like bulk " +
-                    "senders. The default leaves plenty of room for your real email — " +
+                    "senders. The default leaves plenty of room for your real email. " +
                     "$usedToday used so far today."
             )
             ToggleSetting(

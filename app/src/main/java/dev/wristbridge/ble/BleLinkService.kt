@@ -38,7 +38,7 @@ import java.util.UUID
  *
  * Android can only be discovered here, not discover: the watch is the central
  * and opens the connection. That is forced by watchOS, where CoreBluetooth
- * exposes no peripheral role — so the phone advertises and waits.
+ * exposes no peripheral role, so the phone advertises and waits.
  *
  * Everything the email relay does over iCloud, this does directly when the
  * watch is in range: notifications out, replies and health data back.

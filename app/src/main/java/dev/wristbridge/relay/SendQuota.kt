@@ -11,7 +11,7 @@ import java.util.Calendar
  * Apple caps an iCloud account at 1,000 outbound messages a day and soft-blocks
  * accounts that behave like bulk senders. A chatty phone can reach that without
  * trying, and the consequence lands on the user's actual email rather than on
- * this app — so the ceiling is enforced here, deliberately well below Apple's.
+ * this app, so the ceiling is enforced here, deliberately well below Apple's.
  *
  * The count is persisted: a process restart must not hand out a fresh day's
  * worth of sends, which is exactly what an in-memory counter would do.

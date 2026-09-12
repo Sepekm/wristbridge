@@ -14,7 +14,7 @@ import javax.net.ssl.SSLSocketFactory
 /**
  * A minimal IMAP4rev1 client, enough to find replies the watch sent and read
  * their text. Written against the raw protocol for the same reason as
- * [SmtpClient] — no mail dependency, and full control of the socket.
+ * [SmtpClient]: no mail dependency, and full control of the socket.
  *
  * Reading is done over a byte stream rather than a BufferedReader because IMAP
  * literals ("{412}" followed by exactly 412 bytes) need precise byte counting

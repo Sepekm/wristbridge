@@ -3,7 +3,7 @@ import CoreBluetooth
 
 /// The wire format shared with the Android app.
 ///
-/// Keep in step with `app/src/main/java/dev/wristbridge/ble/BleProtocol.kt` —
+/// Keep in step with `app/src/main/java/dev/wristbridge/ble/BleProtocol.kt`:
 /// these are two implementations of one contract.
 enum WireProtocol {
 

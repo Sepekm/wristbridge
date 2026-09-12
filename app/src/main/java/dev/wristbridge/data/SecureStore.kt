@@ -11,7 +11,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Wraps the one secret this app holds — the iCloud app-specific password — in an
+ * Wraps the one secret this app holds, the iCloud app-specific password, in an
  * AES-GCM key that lives in the Android Keystore and never leaves it.
  *
  * Preferences on their own are readable by anything with the app's data
@@ -36,7 +36,7 @@ object SecureStore {
     }
 
     /**
-     * Returns null rather than throwing when the stored value cannot be read —
+     * Returns null rather than throwing when the stored value cannot be read,
      * which happens legitimately if the keystore key was lost (app data cleared,
      * device restored). The UI treats that as "not configured yet".
      */

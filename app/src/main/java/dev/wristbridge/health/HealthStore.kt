@@ -16,9 +16,9 @@ import java.util.Date
  * watch: HealthKit is the sole route to heart rate, sleep and workout data, and
  * nothing on the Android side can reach it.
  *
- * Samples are kept on disk so the history survives a restart, but capped — this
- * is a bridge, not a health database. Anything long-term belongs in Health
- * Connect, which [HealthConnectWriter] forwards to.
+ * Samples are kept on disk so the history survives a restart, but capped: this
+ * is a bridge, not a health database. Forwarding these into Android's Health
+ * Connect is listed as future work in the README and is not implemented here.
  */
 class HealthStore private constructor(context: Context) {
 

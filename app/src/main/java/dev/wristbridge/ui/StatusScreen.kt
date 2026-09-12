@@ -47,7 +47,7 @@ fun StatusScreen(
                 label = "Relay notifications to your watch",
                 detail = when {
                     !ready -> "Complete the steps below first"
-                    snapshot.relayEnabled -> "Running — $sentCount relayed this session"
+                    snapshot.relayEnabled -> "Running, $sentCount relayed this session"
                     else -> "Paused"
                 },
                 trailing = {
@@ -107,7 +107,7 @@ fun StatusScreen(
                 ok = batteryExempt,
                 label = "Unrestricted battery",
                 detail = if (batteryExempt) {
-                    "Granted — the relay will not be frozen in the background"
+                    "Granted, the relay will not be frozen in the background"
                 } else {
                     "Optional, but Android may delay notifications without it"
                 },
@@ -136,7 +136,7 @@ fun StatusScreen(
             SectionCard(title = "Quick check") {
                 Text(
                     "Not sure the watch side is alive? Send yourself a test from the " +
-                        "Setup tab — it arrives as mail, exactly like a relayed " +
+                        "Setup tab. It arrives as mail, exactly like a relayed " +
                         "notification will.",
                     style = MaterialTheme.typography.bodyMedium,
                 )

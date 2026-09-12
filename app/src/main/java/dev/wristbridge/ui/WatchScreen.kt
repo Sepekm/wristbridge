@@ -56,8 +56,8 @@ fun WatchScreen(settings: Settings, snapshot: Settings.Snapshot) {
         SectionCard(title = "Direct watch link") {
             Hint(
                 "This is the half that needs the watchOS app installed. When your " +
-                    "watch is in Bluetooth range, notifications go straight to it — " +
-                    "instantly, with no mail in your inbox — and health data comes " +
+                    "watch is in Bluetooth range, notifications go straight to it " +
+                    "instantly, with no mail in your inbox, and health data comes " +
                     "back the other way. Out of range, the iCloud relay takes over."
             )
             StatusRow(
@@ -100,7 +100,7 @@ fun WatchScreen(settings: Settings, snapshot: Settings.Snapshot) {
             if (samples.isEmpty()) {
                 Hint(
                     "Nothing yet. Health data only arrives once the watchOS app is " +
-                        "installed and connected — see watch/README.md for how to " +
+                        "installed and connected. See watch/README.md for how to " +
                         "build and install it."
                 )
             } else {
@@ -136,14 +136,14 @@ fun WatchScreen(settings: Settings, snapshot: Settings.Snapshot) {
         SectionCard(title = "Installing the watch app") {
             Hint(
                 "The watchOS app is in watch/ in this repository. It needs a Mac " +
-                    "with Xcode to build, and your spare iPhone connected to that " +
-                    "Mac once so Developer Mode appears on the watch."
+                    "with Xcode to build, and an iPhone connected to that Mac once, " +
+                    "which is how Developer Mode is usually made to appear."
             )
             Hint(
-                "A free Apple ID signs it for 7 days, after which it stops launching " +
-                    "and has to be reinstalled from the Mac. A paid Apple Developer " +
-                    "account signs it for a year. That choice is the difference " +
-                    "between a weekly chore and a genuinely one-time setup."
+                "Apple's free signing lasts 7 days, after which the app stops " +
+                    "launching and must be rebuilt from the Mac. A paid Apple " +
+                    "Developer Program membership signs it for a year. That is " +
+                    "the difference between a weekly chore and a one-time setup."
             )
         }
 

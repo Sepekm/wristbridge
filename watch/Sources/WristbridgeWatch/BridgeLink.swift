@@ -5,8 +5,8 @@ import WatchKit
 
 /// Connects the watch to the Android phone over Bluetooth LE.
 ///
-/// watchOS only offers the central role — `CBPeripheralManager` does not exist
-/// here — so the phone advertises and the watch connects. That asymmetry is why
+/// watchOS only offers the central role: `CBPeripheralManager` does not exist
+/// here, so the phone advertises and the watch connects. That asymmetry is why
 /// the Android app is the peripheral.
 @MainActor
 final class BridgeLink: NSObject, ObservableObject {

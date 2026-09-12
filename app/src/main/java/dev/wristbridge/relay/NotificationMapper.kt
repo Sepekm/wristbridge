@@ -11,7 +11,7 @@ import java.util.Locale
  *
  * watchOS renders a Mail push as a large sender line, then the subject, then a
  * short body preview. So the sender line carries the app and who it is from,
- * and the subject carries the message itself — which lands on the wrist looking
+ * and the subject carries the message itself, which lands on the wrist looking
  * close to a native notification rather than an email.
  */
 object NotificationMapper {
@@ -102,8 +102,10 @@ object NotificationMapper {
                 appendLine("Reply to this mail and your answer is sent back through ${item.appLabel}.")
             }
             appendLine()
-            appendLine("— ${item.appLabel} at ${TIME_FORMAT.format(item.postedAt)}")
-            append("via Wristbridge (${item.packageName})")
+            append(
+                "via Wristbridge: ${item.appLabel} at " +
+                    "${TIME_FORMAT.format(item.postedAt)} (${item.packageName})"
+            )
         }
 
         return OutgoingMail(

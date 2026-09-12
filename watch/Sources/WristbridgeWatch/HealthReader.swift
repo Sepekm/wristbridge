@@ -5,7 +5,7 @@ import HealthKit
 ///
 /// This is the only reason the watch app has to exist. Heart rate, sleep,
 /// workouts and the rest live behind HealthKit, which is reachable only from
-/// code running on the watch — no amount of work on the Android side gets at
+/// code running on the watch. No amount of work on the Android side reaches
 /// them.
 @MainActor
 final class HealthReader: ObservableObject {

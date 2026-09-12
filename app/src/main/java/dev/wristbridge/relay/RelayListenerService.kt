@@ -122,7 +122,7 @@ class RelayListenerService : NotificationListenerService() {
         recentSends.addLast(now)
 
         // Registering has to happen here, while the live notification (and its
-        // reply PendingIntent) is still in hand — the queued copy is only data.
+        // reply PendingIntent) is still in hand; the queued copy is only data.
         val replyToken = if (config.replyChannelEnabled || config.bleLinkEnabled) {
             ReplyRegistry.register(notification, extracted.appLabel)
         } else {

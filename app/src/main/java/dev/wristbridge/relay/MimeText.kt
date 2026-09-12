@@ -7,8 +7,8 @@ import java.util.Base64
  * Pulls the human-written part out of a mail body.
  *
  * A reply composed on an Apple Watch comes back as multipart/alternative with
- * quoted-printable text, followed by the quoted original. Only the top — what
- * the person actually dictated or scribbled — is wanted.
+ * quoted-printable text, followed by the quoted original. Only the top, what
+ * the person actually dictated or scribbled, is wanted.
  */
 object MimeText {
 
@@ -139,11 +139,10 @@ object MimeText {
                 ON_WROTE.containsMatchIn(trimmed) ||
                 trimmed.startsWith("-----Original Message-----") ||
                 trimmed.startsWith("Sent from my") ||
-                trimmed == "via Wristbridge" ||
-                trimmed.startsWith("via Wristbridge (") ||
-                // Our own footer's first line, which otherwise gets echoed
-                // back into the app as part of the reply.
-                RELAY_FOOTER.containsMatchIn(trimmed)
+                // Our own footer, which otherwise gets echoed back into the
+                // originating app as part of the reply. Matching a fixed
+                // literal avoids clipping a genuine line of someone's text.
+                trimmed.startsWith("via Wristbridge")
         }
         val kept = if (cut >= 0) lines.take(cut) else lines
         return kept.joinToString("\n").trim()
@@ -160,6 +159,4 @@ object MimeText {
     /** "On 12 Sep 2026, at 14:03, Alice wrote:" and its many variants. */
     private val ON_WROTE = Regex("""(?i)^On .{0,120}\bwrote:\s*$""")
 
-    /** The "— Signal at 14:03" line NotificationMapper appends to every relay. */
-    private val RELAY_FOOTER = Regex("""^—\s.+\sat\s\d{1,2}:\d{2}\s*$""")
 }

@@ -11,7 +11,7 @@ import java.util.UUID
  * (23 bytes until the peer asks for more), so every message is split into
  * chunks carrying a one-byte header, and reassembled on the far side.
  *
- * Keep this file and `watch/Sources/WristbridgeWatch/Protocol.swift` in step —
+ * Keep this file and `watch/Sources/WristbridgeWatch/Protocol.swift` in step:
  * they are two implementations of one contract.
  */
 object BleProtocol {

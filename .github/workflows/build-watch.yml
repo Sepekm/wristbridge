@@ -4,7 +4,7 @@ name: Build watch app
 # rather than on the Mac you only have access to occasionally.
 #
 # It builds for the simulator with signing disabled, which needs no Apple
-# Developer account and no provisioning profile — the point is to prove the
+# Developer account and no provisioning profile. The point is to prove the
 # code compiles, not to produce something installable.
 #
 # macOS runner minutes bill at ten times the Linux rate on private repos, so

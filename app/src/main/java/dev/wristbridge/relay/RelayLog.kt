@@ -10,7 +10,7 @@ import java.util.Date
  * only question that matters while you are setting it up: did that notification
  * actually reach the watch, and if not, why not.
  *
- * Deliberately not persisted — it holds notification contents, and there is no
+ * Deliberately not persisted: it holds notification contents, and there is no
  * reason for that to outlive the process.
  */
 object RelayLog {
