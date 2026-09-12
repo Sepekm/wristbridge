@@ -1,0 +1,14 @@
+# Normalise to LF in the repository. gradlew is executed by the Linux CI
+# runner, where CRLF line endings make the shebang fail with "bad interpreter".
+* text=auto eol=lf
+
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows-native scripts keep CRLF.
+*.bat text eol=crlf
+
+*.jar binary
+*.apk binary
+*.keystore binary
+*.png binary

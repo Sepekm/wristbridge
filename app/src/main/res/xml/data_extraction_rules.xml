@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <!--
+      The stored credential is encrypted with a Keystore key that cannot leave
+      the device, so a transferred copy would be undecryptable anyway. Excluding
+      it outright is clearer than shipping ciphertext nobody can open.
+    -->
+    <cloud-backup>
+        <exclude domain="sharedpref" path="wristbridge.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="wristbridge.xml" />
+    </device-transfer>
+</data-extraction-rules>

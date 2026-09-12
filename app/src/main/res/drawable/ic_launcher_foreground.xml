@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A watch case with a relay arc sweeping into it: the phone's signal arriving
+  on the wrist. Drawn inside the 72dp safe zone of the 108dp adaptive canvas.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Upper strap lug -->
+    <path
+        android:fillColor="#7FA6FF"
+        android:pathData="M47,26 h14 a3,3 0 0 1 3,3 v8 h-20 v-8 a3,3 0 0 1 3,-3 z" />
+
+    <!-- Lower strap lug -->
+    <path
+        android:fillColor="#7FA6FF"
+        android:pathData="M44,71 h20 v8 a3,3 0 0 1 -3,3 h-14 a3,3 0 0 1 -3,-3 z" />
+
+    <!-- Watch case -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,34 h22 a9,9 0 0 1 9,9 v22 a9,9 0 0 1 -9,9 h-22 a9,9 0 0 1 -9,-9 v-22 a9,9 0 0 1 9,-9 z" />
+
+    <!-- Face -->
+    <path
+        android:fillColor="#1F2A44"
+        android:pathData="M45,40 h18 a6,6 0 0 1 6,6 v16 a6,6 0 0 1 -6,6 h-18 a6,6 0 0 1 -6,-6 v-16 a6,6 0 0 1 6,-6 z" />
+
+    <!-- Incoming relay arcs -->
+    <path
+        android:strokeColor="#7FA6FF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M50,47 a8,8 0 0 1 0,14" />
+    <path
+        android:strokeColor="#7FA6FF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M56,43 a14,14 0 0 1 0,22" />
+</vector>
