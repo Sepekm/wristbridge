@@ -58,35 +58,53 @@ Mac, no Xcode, no developer account, no subscription.
 
 ### What you get, honestly
 
+Wristbridge comes in two halves, and the second one is optional.
+
+### Half one: the mail relay — no Mac, no iPhone, no developer account
+
 | | |
 |---|---|
 | Android notifications on your wrist | Yes, per-app, a few seconds' latency |
 | Notification text, sender, app name | Yes |
 | Works with the iPhone off / nonexistent | Yes — that's the whole design |
-| **Replying from the watch** | **Yes** — see below |
-| Health data from watch → phone | No. That needs code running on the watch. |
-| Heart rate, ECG, sleep, workouts | No. Same reason. |
-| Controlling the phone from the watch | No |
+| Replying from the watch | Yes, via the watch's Mail app |
+| Always on, app closed, screen off | Yes |
+| Health data from the watch | No — HealthKit is unreachable from Android |
 
-Anything that reads the watch's *sensors* is out of reach, because only code
-running on watchOS can touch HealthKit. Getting code onto the watch needs a Mac
-within Bluetooth range, and — per Apple's own developer forums — an iPhone
-plugged into that Mac before Developer Mode will even appear on the watch. That
-is the honest boundary, and it is not one cleverness crosses.
+### Half two: the watchOS app — needs a Mac, and an iPhone once
 
-Everything on the Android side of that line is fair game, which is why replies
-work.
+| | |
+|---|---|
+| Heart rate, resting HR, blood oxygen | Yes |
+| Steps, active energy, exercise, stand | Yes |
+| Sleep stages and workouts | Yes |
+| Notifications, instantly, no email | Yes, while the watch app is open |
+| Replying without touching Mail | Yes, while the watch app is open |
+| Running in the background | **No** — watchOS will not hold the link open |
+
+The two are complementary, not alternatives. The watch app adds the sensor half
+and makes things instant while you're looking at it; the mail relay stays the
+always-on path, because watchOS does not let a third-party app keep a Bluetooth
+connection alive in the background. Leave both on.
+
+ECG is the one thing still missing: Apple does not expose ECG waveforms to
+third-party apps at all, on any platform. Merge's ECG feature reads the
+*classification* result, not the trace.
+
+Setting up half two is [`watch/README.md`](watch/README.md). Read the
+provisioning note there first — a free Apple ID signs the app for seven days,
+a paid account for a year, and that decides whether this is genuinely one-time.
 
 ### The one prerequisite I can't work around
 
 **Your Apple Watch must already be activated and signed into an iCloud account.**
 
-If it is — you used to have an iPhone, or you bought it set up — you're fine,
-and you never need an iPhone again.
+If it is — you used to have an iPhone, or you bought it set up — the mail relay
+needs nothing else, ever.
 
 If it's factory-reset and showing a pairing screen, it is currently an
-expensive paperweight, and you need to borrow an iPhone **once** to activate it.
-This is true of Merge too. Nothing changes it.
+expensive paperweight, and you need an iPhone **once** to activate it. This is
+true of Merge too. Nothing changes it.
 
 ---
 
@@ -256,7 +274,14 @@ app/src/main/java/dev/wristbridge/
 │   ├── ReplyRegistry.kt      Holds each notification's RemoteInput action
 │   ├── ReplyPollService.kt   Watches iCloud for replies
 │   └── RelayLog.kt           In-memory activity log (never written to disk)
+├── ble/
+│   ├── BleProtocol.kt        Wire format, mirrored in Protocol.swift
+│   └── BleLinkService.kt     GATT server the watch app connects to
+├── health/
+│   └── HealthStore.kt        Samples received from the watch
 └── ui/                       Compose UI
+
+watch/                        The watchOS app — see watch/README.md
 ```
 
 The mail parsing is covered by unit tests (`app/src/test/`) built from real
@@ -270,12 +295,17 @@ IMAP FETCH framing, since it can't be exercised against a live mailbox:
 
 ## Where this could go further
 
-- **Calendar.** Push Android calendar events to iCloud over CalDAV so they
-  appear on the watch face and in complications. Android-side only, so it is
-  genuinely reachable — the next thing worth building.
-- **Reminders.** Same channel, as CalDAV VTODOs.
+- **Health Connect.** Forward the samples the watch sends into Android's
+  Health Connect, so they show up in Fitbit, Google Fit and everything else on
+  the phone. Deliberately not done yet: getting the data off the watch was the
+  hard part, and this is mechanical once it flows.
+- **Calendar and reminders.** Push Android events to iCloud over CalDAV so they
+  appear on the watch face and in complications. Android-side only.
 - **IMAP IDLE** instead of polling, to drop reply latency to near-instant and
-  retire the foreground service.
+  retire the reply channel's foreground service.
+- **A workout session** on the watch would keep the BLE link alive in the
+  background, which is how fitness apps do it. It costs real battery, so it
+  should be a deliberate toggle rather than the default.
 - **The full bridge.** If you ever get access to a Mac, the watchOS half —
   BLE GATT to the Android app, health data flowing back — becomes possible, and
   the Android side here is already the right shape to talk to it.
