@@ -19,7 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,11 +37,15 @@ private data class InstalledApp(val packageName: String, val label: String)
 fun AppsScreen(settings: Settings, snapshot: Settings.Snapshot) {
     val context = LocalContext.current
     var query by remember { mutableStateOf("") }
+    var showAll by remember { mutableStateOf(false) }
 
     // Enumerating and labelling every package is slow enough to jank the first
     // frame, so it happens off the main thread and the list renders when ready.
-    val apps by produceState<List<InstalledApp>?>(initialValue = null) {
-        value = withContext(Dispatchers.IO) { loadLaunchableApps(context) }
+    // Reloads when showAll flips. The previous list stays on screen while the
+    // new one loads, which reads better than blanking it.
+    var apps by remember { mutableStateOf<List<InstalledApp>?>(null) }
+    LaunchedEffect(showAll) {
+        apps = withContext(Dispatchers.IO) { loadApps(context, showAll) }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -58,6 +62,20 @@ fun AppsScreen(settings: Settings, snapshot: Settings.Snapshot) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Show every installed app", style = MaterialTheme.typography.bodyLarge)
+                    Hint(
+                        "Off by default, showing only apps with an icon. Turn it on " +
+                            "to reach something that notifies you without appearing " +
+                            "in your app list."
+                    )
+                }
+                Switch(checked = showAll, onCheckedChange = { showAll = it })
+            }
         }
 
         val loaded = apps
@@ -111,17 +129,25 @@ fun AppsScreen(settings: Settings, snapshot: Settings.Snapshot) {
 }
 
 /**
- * Lists apps the user could plausibly want forwarded: anything with a launcher
- * entry. Framework packages without a launcher icon are excluded because they
- * would bury the list without ever producing a notification worth relaying.
+ * Lists apps that can be forwarded.
+ *
+ * The default is anything with a launcher entry, which is what almost everyone
+ * wants and keeps the list readable. But plenty of things that notify have no
+ * launcher icon at all, from authenticator helpers to work-profile and system
+ * components, and restricting the list to launchable apps made those
+ * impossible to choose rather than merely awkward. [includeAll] opens it up.
  */
-private fun loadLaunchableApps(context: Context): List<InstalledApp> {
+private fun loadApps(context: Context, includeAll: Boolean): List<InstalledApp> {
     val pm = context.packageManager
-    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
     return runCatching {
-        pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
-            .asSequence()
-            .mapNotNull { it.activityInfo?.applicationInfo }
+        val packages = if (includeAll) {
+            pm.getInstalledApplications(PackageManager.MATCH_DISABLED_COMPONENTS)
+        } else {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+                .mapNotNull { it.activityInfo?.applicationInfo }
+        }
+        packages.asSequence()
             .filter { it.packageName != context.packageName }
             .distinctBy { it.packageName }
             .map { InstalledApp(it.packageName, pm.getApplicationLabel(it).toString()) }

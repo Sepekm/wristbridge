@@ -57,13 +57,14 @@ class SendQuota private constructor(context: Context) {
         _used.value = count
     }
 
-    @Synchronized
-    fun remaining(limit: Int): Int = (limit - currentCount()).coerceAtLeast(0)
-
     private fun currentCount(): Int =
         if (prefs.getInt(KEY_DAY, -1) == dayStamp()) prefs.getInt(KEY_COUNT, 0) else 0
 
-    /** Days since the epoch in local time, so the window turns over at midnight. */
+    /**
+     * A value unique to one local calendar day, so the allowance turns over at
+     * midnight wherever the phone is. Day-of-year never reaches 1000, so
+     * packing it under the year cannot collide.
+     */
     private fun dayStamp(): Int {
         val calendar = Calendar.getInstance()
         return calendar.get(Calendar.YEAR) * 1000 + calendar.get(Calendar.DAY_OF_YEAR)

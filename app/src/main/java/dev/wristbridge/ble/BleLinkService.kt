@@ -411,6 +411,20 @@ class BleLinkService : Service() {
      * want to pair a different one.
      */
     private fun handleHello(device: BluetoothDevice, message: BleProtocol.Inbound.Hello) {
+        // The wire format carries a version; refusing one this build does not
+        // know is the point of sending it. Interpreting a newer dialect by
+        // guesswork would be worse than declining it plainly.
+        if (message.version != BleProtocol.PROTOCOL_VERSION) {
+            RelayLog.record(
+                RelayLog.Outcome.FAILED,
+                "Watch link",
+                "The watch app speaks a different version of the bridge protocol",
+                "It expects version ${message.version}; this app speaks " +
+                    "${BleProtocol.PROTOCOL_VERSION}. Update whichever is older.",
+            )
+            return
+        }
+
         val known = trustPrefs.getString(KEY_TOKEN, null)
 
         val presented = message.token

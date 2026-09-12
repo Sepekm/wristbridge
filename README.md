@@ -224,7 +224,9 @@ If the mail never arrives at all, the problem is on the Android side, and the
 Relaying every notification to an inbox fills it quickly. The defaults are
 conservative and all of it is tunable under **Setup > Tuning**:
 
-- **Opt in per app.** Nothing is forwarded until you choose it.
+- **Opt in per app.** Nothing is forwarded until you choose it. The list shows
+  apps with an icon by default; **Show every installed app** reaches the ones
+  that notify you without appearing in your app drawer.
 - **Repeat collapsing**, 20s by default, because chat apps repost on every
   message in a thread.
 - **Hourly ceiling**, 60 by default, so one chatty app cannot monopolise the
@@ -277,9 +279,11 @@ risk of the software misbehaving.
 If that trade is not one you want to make, do not install it.
 
 **The link between phone and watch.** Bluetooth delivery requires a bonded,
-encrypted connection, and the phone only accepts the first watch that pairs
-until you press "Forget this watch". Replies arriving by mail are acted on only
-when they come from your own account. Neither of these makes the app immune to
+encrypted connection. Each end checks the other: the phone only accepts the
+first watch that pairs, until you press "Forget this watch", and the watch
+refuses a phone that does not present the token it paired with, so something
+else advertising the same service cannot pose as your phone. Replies arriving
+by mail are acted on only when they come from your own account. Neither of these makes the app immune to
 a compromised phone or a compromised mailbox: anyone holding either can read
 relayed notifications, and anyone who can send mail *from* your account can
 trigger a reply.
