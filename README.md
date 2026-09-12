@@ -298,6 +298,31 @@ IMAP FETCH framing, since it can't be exercised against a live mailbox:
 
 ---
 
+## Licence, and what you're agreeing to
+
+MIT — see [LICENSE](LICENSE). Use it, fork it, sell it, whatever.
+
+In plain terms: **this is provided as-is, and you use it at your own risk.**
+It is a personal project, not a product. Nobody is on call if it breaks, loses
+a notification, or behaves in a way you didn't expect. That is not politeness —
+it is the actual legal position the MIT licence sets out, in the paragraph in
+capitals at the bottom of it.
+
+Two things worth understanding before you type a password into it:
+
+- The app asks for an **app-specific password**, not your Apple ID password.
+  Those are revocable one at a time at [account.apple.com](https://account.apple.com)
+  without touching anything else, and revoking one is the clean way to cut the
+  app off. There's a **Forget password** button in Setup for the phone's copy.
+- Your credential is sealed with a key held in the Android Keystore and never
+  leaves the device. There is no Wristbridge server, no account, and no
+  telemetry — traffic goes from your phone to Apple and nowhere else. You do
+  not have to take that on trust. Exactly two files in the codebase open a
+  network socket, both to `*.mail.me.com`:
+  [Smtp.kt](app/src/main/java/dev/wristbridge/relay/Smtp.kt) for sending and
+  [Imap.kt](app/src/main/java/dev/wristbridge/relay/Imap.kt) for reading
+  replies. Grep for `Socket(` and you will find nothing else.
+
 ## Where this could go further
 
 - **Health Connect.** Forward the samples the watch sends into Android's
