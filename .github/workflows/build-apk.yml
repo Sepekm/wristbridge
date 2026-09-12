@@ -29,8 +29,10 @@ jobs:
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      # The release build is the one worth installing: minified and shrunk to
+      # ~2 MB, against ~54 MB for debug with its Compose tooling.
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
       - name: Upload test report on failure
         if: failure()
@@ -43,7 +45,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: wristbridge-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: wristbridge-apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30

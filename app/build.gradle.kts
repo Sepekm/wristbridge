@@ -18,8 +18,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Signed with the debug key so `assembleRelease` works on a clean
+            // checkout. This is a personal sideload, not a Play Store upload;
+            // swap in your own keystore if you ever want to publish it.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

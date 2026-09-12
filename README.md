@@ -146,21 +146,26 @@ Turn it on in **Setup → Reply from your wrist**. Two honest caveats:
 
 1. Push this folder to a GitHub repository.
 2. Open the **Actions** tab → **Build APK** → **Run workflow**.
-3. When it finishes, download the `wristbridge-debug-apk` artifact.
-4. Transfer the APK to your Pixel and install it. GrapheneOS will prompt for
-   permission to install from that source.
+3. When it finishes, download the `wristbridge-apk` artifact (~2 MB).
+4. Install it on your Pixel. GrapheneOS will prompt for permission to install
+   from that source.
 
-The workflow is already at `.github/workflows/build-apk.yml`.
+The workflow is already at `.github/workflows/build-apk.yml`. It runs the unit
+tests before building, so a broken parser fails the run rather than shipping.
 
 ### Option B — build locally
 
 Needs a JDK (17–21) and the Android SDK with platform 35.
 
 ```bash
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
 ```
 
-The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
+The APK lands in `app/build/outputs/apk/release/app-release.apk`.
+
+It is signed with the debug key so a clean checkout builds something
+installable. That is fine for sideloading onto your own phone; point the
+release `signingConfig` at your own keystore if you ever want to distribute it.
 
 > Point `local.properties` at your SDK (`sdk.dir=...`) if the build can't find
 > it. JDK 22+ is too new for this Gradle/AGP pair — use 17 or 21.
