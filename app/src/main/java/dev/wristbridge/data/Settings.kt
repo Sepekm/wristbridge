@@ -32,6 +32,7 @@ class Settings private constructor(context: Context) {
         val respectLocalOnly: Boolean,
         val replyChannelEnabled: Boolean,
         val replyPollSeconds: Int,
+        val bleLinkEnabled: Boolean,
     ) {
         /** The address mail is delivered to; defaults to the account itself. */
         val effectiveDestination: String get() = destination.ifBlank { account }
@@ -76,6 +77,8 @@ class Settings private constructor(context: Context) {
 
     fun setReplyChannelEnabled(value: Boolean) = edit { putBoolean(KEY_REPLY, value) }
 
+    fun setBleLinkEnabled(value: Boolean) = edit { putBoolean(KEY_BLE, value) }
+
     fun setReplyPollSeconds(value: Int) = edit {
         putInt(KEY_REPLY_POLL, value.coerceIn(15, 900))
     }
@@ -97,6 +100,7 @@ class Settings private constructor(context: Context) {
         respectLocalOnly = prefs.getBoolean(KEY_LOCAL_ONLY, true),
         replyChannelEnabled = prefs.getBoolean(KEY_REPLY, false),
         replyPollSeconds = prefs.getInt(KEY_REPLY_POLL, DEFAULT_REPLY_POLL_SECONDS),
+        bleLinkEnabled = prefs.getBoolean(KEY_BLE, false),
     )
 
     companion object {
@@ -111,6 +115,7 @@ class Settings private constructor(context: Context) {
         private const val KEY_LOCAL_ONLY = "respect_local_only"
         private const val KEY_REPLY = "reply_channel"
         private const val KEY_REPLY_POLL = "reply_poll_seconds"
+        private const val KEY_BLE = "ble_link"
 
         /**
          * How often to check iCloud for replies. Every poll is a TLS handshake,

@@ -7,6 +7,8 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.NotificationListenerService.Ranking
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import dev.wristbridge.ble.BleLinkService
+import dev.wristbridge.ble.BleProtocol
 import dev.wristbridge.data.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -121,7 +123,7 @@ class RelayListenerService : NotificationListenerService() {
 
         // Registering has to happen here, while the live notification (and its
         // reply PendingIntent) is still in hand — the queued copy is only data.
-        val replyToken = if (config.replyChannelEnabled) {
+        val replyToken = if (config.replyChannelEnabled || config.bleLinkEnabled) {
             ReplyRegistry.register(notification, extracted.appLabel)
         } else {
             null
@@ -192,6 +194,12 @@ class RelayListenerService : NotificationListenerService() {
 
     private suspend fun deliver(item: NotificationMapper.Extracted, replyToken: String?) {
         val config = settings.snapshot
+
+        // When the watch is in Bluetooth range the direct link is strictly
+        // better than mail: instant, no inbox clutter, and it carries the
+        // reply affordance natively. Email is the fallback for out of range.
+        if (config.bleLinkEnabled && deliverOverBle(item, replyToken)) return
+
         val password = settings.password()
         if (password == null) {
             RelayLog.record(RelayLog.Outcome.FAILED, item.appLabel, "No password stored")
@@ -235,6 +243,27 @@ class RelayListenerService : NotificationListenerService() {
             mail.subject,
             lastError ?: "Unknown error",
         )
+    }
+
+    /**
+     * Pushes straight to a connected watch. Returns false when no watch is
+     * subscribed, which is the signal to fall back to the mail relay.
+     */
+    private fun deliverOverBle(item: NotificationMapper.Extracted, replyToken: String?): Boolean {
+        val link = BleLinkService.instance ?: return false
+        val message = BleProtocol.notification(
+            id = replyToken.orEmpty(),
+            app = item.appLabel,
+            title = item.title,
+            text = item.text,
+            canReply = replyToken != null,
+            postedAt = item.postedAt.time,
+        )
+        val delivered = runCatching { link.broadcast(message) }.getOrDefault(false)
+        if (delivered) {
+            RelayLog.record(RelayLog.Outcome.SENT, item.appLabel, "→ watch (Bluetooth)")
+        }
+        return delivered
     }
 
     private val labelCache = HashMap<String, String>()

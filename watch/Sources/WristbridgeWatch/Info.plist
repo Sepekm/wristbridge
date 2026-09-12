@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Wristbridge</string>
+	<key>CFBundleName</key>
+	<string>Wristbridge</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<!-- Single-target watch app that does not need an iPhone companion. -->
+	<key>WKApplication</key>
+	<true/>
+	<key>WKRunsIndependentlyOfCompanionApp</key>
+	<true/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Wristbridge reads your health data so it can send it to your Android phone. Nothing is shared with anyone else.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Wristbridge connects to your Android phone over Bluetooth to carry notifications and health data between them.</string>
+</dict>
+</plist>

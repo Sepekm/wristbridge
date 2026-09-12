@@ -82,6 +82,7 @@ private enum class Screen(val label: String) {
     STATUS("Status"),
     SETUP("Setup"),
     APPS("Apps"),
+    WATCH("Watch"),
     ACTIVITY("Activity"),
 }
 
@@ -136,6 +137,7 @@ private fun WristbridgeApp() {
                 )
                 Screen.SETUP -> SetupScreen(settings = settings, snapshot = snapshot)
                 Screen.APPS -> AppsScreen(settings = settings, snapshot = snapshot)
+                Screen.WATCH -> WatchScreen(settings = settings, snapshot = snapshot)
                 Screen.ACTIVITY -> ActivityScreen()
             }
         }

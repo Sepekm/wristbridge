@@ -1,0 +1,48 @@
+name: Build watch app
+
+# Compiles the watchOS app on a macOS runner, so Swift mistakes surface here
+# rather than on the Mac you only have access to occasionally.
+#
+# It builds for the simulator with signing disabled, which needs no Apple
+# Developer account and no provisioning profile — the point is to prove the
+# code compiles, not to produce something installable.
+#
+# macOS runner minutes bill at ten times the Linux rate on private repos, so
+# this deliberately only runs when the watch app itself changes.
+on:
+  push:
+    paths:
+      - 'watch/**'
+      - '.github/workflows/build-watch.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: watch
+        run: xcodegen generate
+
+      - name: Show available watchOS SDKs
+        run: xcodebuild -showsdks | grep -i watch || true
+
+      - name: Build for watchOS Simulator
+        working-directory: watch
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project WristbridgeWatch.xcodeproj \
+            -scheme WristbridgeWatch \
+            -destination 'generic/platform=watchOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
