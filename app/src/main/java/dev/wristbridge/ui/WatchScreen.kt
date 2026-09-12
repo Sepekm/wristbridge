@@ -91,6 +91,14 @@ fun WatchScreen(settings: Settings, snapshot: Settings.Snapshot) {
                 label = "Watch connected",
                 detail = link.connectedWatch ?: "No watch has connected yet",
             )
+            Hint(
+                "The first watch to connect is remembered, and after that only " +
+                    "that watch is accepted. The link also requires Bluetooth " +
+                    "pairing, so nothing is readable by another device in range."
+            )
+            TextButton(
+                onClick = { BleLinkService.instance?.forgetPairedWatch() }
+            ) { Text("Forget this watch") }
             if (link.messagesIn > 0 || link.messagesOut > 0) {
                 Hint("${link.messagesOut} sent · ${link.messagesIn} received this session")
             }
@@ -154,12 +162,20 @@ fun WatchScreen(settings: Settings, snapshot: Settings.Snapshot) {
 private fun formatValue(value: Double): String =
     if (value == value.toLong().toDouble()) value.toLong().toString() else "%.1f".format(value)
 
-internal fun blePermissions(): Array<String> =
+/**
+ * Everything needed before the watch link can run: the Bluetooth grants, plus
+ * notification permission so its foreground service can show the ongoing
+ * notice Android requires of it.
+ */
+internal fun blePermissions(): Array<String> = buildList {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        arrayOf(Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT)
-    } else {
-        emptyArray()
+        add(Manifest.permission.BLUETOOTH_ADVERTISE)
+        add(Manifest.permission.BLUETOOTH_CONNECT)
     }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        add(Manifest.permission.POST_NOTIFICATIONS)
+    }
+}.toTypedArray()
 
 internal fun hasBlePermissions(context: android.content.Context): Boolean =
     blePermissions().all {

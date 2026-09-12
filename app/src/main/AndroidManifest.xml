@@ -56,7 +56,6 @@
         <service
             android:name=".relay.RelayListenerService"
             android:exported="false"
-            android:label="@string/app_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />

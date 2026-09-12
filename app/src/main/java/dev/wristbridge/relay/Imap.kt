@@ -35,6 +35,7 @@ class ImapClient(
         val uid: Long,
         val inReplyTo: String?,
         val subject: String?,
+        val from: String?,
         val bodyText: String,
     )
 
@@ -136,16 +137,17 @@ class ImapClient(
 
         fun fetch(uid: Long): Message? {
             val headers = command(
-                "UID FETCH $uid (BODY.PEEK[HEADER.FIELDS (IN-REPLY-TO SUBJECT)])"
+                "UID FETCH $uid (BODY.PEEK[HEADER.FIELDS (IN-REPLY-TO SUBJECT FROM)])"
             )
             val body = command("UID FETCH $uid (BODY.PEEK[TEXT])")
 
             val inReplyTo = HEADER_IN_REPLY_TO.find(headers)?.groupValues?.get(1)?.trim()
             val subject = HEADER_SUBJECT.find(headers)?.groupValues?.get(1)?.trim()
+            val from = HEADER_FROM.find(headers)?.groupValues?.get(1)?.trim()
             val text = MimeText.extractPlainText(body)
 
             if (inReplyTo.isNullOrBlank()) return null
-            return Message(uid, inReplyTo, subject, text)
+            return Message(uid, inReplyTo, subject, from, text)
         }
 
         /** Marks a handled reply read, so the unread count does not creep up. */
@@ -204,6 +206,18 @@ class ImapClient(
         private val HEADER_IN_REPLY_TO =
             Regex("""(?im)^In-Reply-To:\s*(.+)$""")
         private val HEADER_SUBJECT = Regex("""(?im)^Subject:\s*(.+)$""")
+        private val HEADER_FROM = Regex("""(?im)^From:\s*(.+)$""")
+        private val ANGLE_ADDRESS = Regex("""<([^>]+)>""")
+
+        /**
+         * Pulls the bare address out of a From header, which may be either
+         * `someone@example.com` or `Their Name <someone@example.com>`.
+         */
+        fun addressOf(header: String?): String? {
+            if (header.isNullOrBlank()) return null
+            val angled = ANGLE_ADDRESS.find(header)?.groupValues?.get(1)
+            return (angled ?: header).trim().trim('"').trim().lowercase()
+        }
 
         fun quote(value: String): String =
             "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

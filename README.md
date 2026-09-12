@@ -120,7 +120,8 @@ notification rather than mail:
 - **Body** carries the full text, a timestamp, and the source app
 
 There is no Wristbridge server, no account, and no telemetry. Your credential is
-encrypted with an Android Keystore key that cannot leave the device.
+encrypted with a key held in the Android Keystore, which no app can read back
+out, including this one.
 
 ## Replying from your wrist
 
@@ -226,8 +227,8 @@ conservative and all of it is tunable under **Setup > Tuning**:
 - **Opt in per app.** Nothing is forwarded until you choose it.
 - **Repeat collapsing**, 20s by default, because chat apps repost on every
   message in a thread.
-- **Hourly ceiling**, 60 by default, so a misbehaving app cannot drain the
-  battery.
+- **Hourly ceiling**, 60 by default, so one chatty app cannot monopolise the
+  relay.
 - **Daily ceiling**, 300 by default. This one protects your Apple account
   rather than your battery: Apple limits an iCloud account to
   [1,000 messages a day](https://support.apple.com/en-us/102198), and that is
@@ -252,8 +253,36 @@ alias is on the same account.
   [Smtp.kt](app/src/main/java/dev/wristbridge/relay/Smtp.kt) for sending and
   [Imap.kt](app/src/main/java/dev/wristbridge/relay/Imap.kt) for reading
   replies. Searching the source for `Socket(` finds nothing else.
-- Notification contents are never written to disk. The Activity log is held in
-  memory and cleared when the process restarts.
+- Notification contents are not written to disk by this app. The Activity log
+  is held in memory and cleared when the process restarts. The text does of
+  course reach Apple, since sending it there is the whole mechanism.
+
+## Risks worth knowing before you use it
+
+**Apple has not blessed this use of iCloud.** Wristbridge talks to iCloud over
+standard IMAP and SMTP with an app-specific password, which is the same thing
+any mail client does. But it does so automatically and continuously, and
+[Apple's iCloud terms](https://www.apple.com/legal/internet-services/icloud/us-en/terms.html)
+prohibit "accessing the Service through any automated means" where that
+interferes with or disrupts it, and reserve Apple's right to suspend an account
+"at any time, under certain circumstances and without prior notice".
+
+Ordinary mail-client traffic at the volumes here is a long way from the bulk
+sending those clauses are aimed at, and the daily cap exists partly to keep it
+that way. But the honest position is that this is not a use Apple has endorsed,
+and the account at stake is the same Apple ID holding your photos, backups and
+purchases. That is the real risk of running this, and it is larger than any
+risk of the software misbehaving.
+
+If that trade is not one you want to make, do not install it.
+
+**The link between phone and watch.** Bluetooth delivery requires a bonded,
+encrypted connection, and the phone only accepts the first watch that pairs
+until you press "Forget this watch". Replies arriving by mail are acted on only
+when they come from your own account. Neither of these makes the app immune to
+a compromised phone or a compromised mailbox: anyone holding either can read
+relayed notifications, and anyone who can send mail *from* your account can
+trigger a reply.
 
 ## Project layout
 
@@ -292,6 +321,10 @@ IMAP FETCH framing since it cannot be exercised against a live mailbox:
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+The built APK also contains Apache-2.0 licensed libraries from AndroidX, Jetpack
+Compose and Kotlin. Their attribution is in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Where this could go further
 

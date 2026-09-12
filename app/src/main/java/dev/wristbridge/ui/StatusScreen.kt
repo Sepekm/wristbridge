@@ -127,8 +127,11 @@ fun StatusScreen(
                     "in the watch's Settings › Notifications."
             )
             Hint(
-                "iCloud Mail is the one push channel a watch keeps alive on its own, " +
-                    "without an iPhone powered on somewhere. That is what makes this work."
+                "Apple documents that SMS and third-party notifications need the " +
+                    "paired iPhone powered on. iCloud Mail appears not to, which is " +
+                    "what this relies on, but Apple does not document it either way. " +
+                    "The Send to watch test in Setup is how you confirm it for your " +
+                    "own watch."
             )
         }
 

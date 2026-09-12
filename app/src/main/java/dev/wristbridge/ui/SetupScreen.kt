@@ -1,5 +1,9 @@
 package dev.wristbridge.ui
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,6 +65,15 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
     var revealPassword by remember { mutableStateOf(false) }
     var test by remember { mutableStateOf<TestState>(TestState.Idle) }
     val usedToday by SendQuota.get(context).usedToday.collectAsState()
+
+    val notificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.POST_NOTIFICATIONS
+    } else {
+        null
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { /* the relay works either way; the notice just stays hidden */ }
 
     /**
      * Runs a network check off the main thread and folds both success and the
@@ -211,8 +224,14 @@ fun SetupScreen(settings: Settings, snapshot: Settings.Snapshot) {
                 detail = "Reply to the mail on your watch and it goes out as a normal " +
                     "message from the app it came from.",
                 checked = snapshot.replyChannelEnabled,
-                onCheckedChange = {
-                    settings.setReplyChannelEnabled(it)
+                onCheckedChange = { wanted ->
+                    settings.setReplyChannelEnabled(wanted)
+                    // The poller runs in the foreground, so on Android 13+ it
+                    // needs permission to show its ongoing notice. Asked here,
+                    // where the prompt has context, rather than at launch.
+                    if (wanted && notificationPermission != null) {
+                        permissionLauncher.launch(arrayOf(notificationPermission))
+                    }
                     ReplyPollService.sync(context)
                 },
             )

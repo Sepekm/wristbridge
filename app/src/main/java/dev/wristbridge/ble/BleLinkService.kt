@@ -61,6 +61,13 @@ class BleLinkService : Service() {
 
     /** Peers that have subscribed to TX, with their negotiated payload size. */
     private val subscribers = Collections.synchronizedMap(HashMap<String, Int>())
+
+    /**
+     * Peers that have presented the pairing token. Encryption alone proves a
+     * peer bonded with this phone at some point; this proves it is the watch
+     * that was actually set up, and nothing is sent to anyone else.
+     */
+    private val authenticated = Collections.synchronizedSet(HashSet<String>())
     private val devices = Collections.synchronizedMap(HashMap<String, BluetoothDevice>())
     private val reassemblers = Collections.synchronizedMap(HashMap<String, BleProtocol.Reassembler>())
 
@@ -122,20 +129,25 @@ class BleLinkService : Service() {
             BleProtocol.RX_UUID,
             BluetoothGattCharacteristic.PROPERTY_WRITE or
                 BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
-            BluetoothGattCharacteristic.PERMISSION_WRITE,
+            // ENCRYPTED, not plain WRITE: this makes Android insist on a bonded,
+            // encrypted link before a peer may write anything. Without it any
+            // device in radio range could talk to the bridge.
+            BluetoothGattCharacteristic.PERMISSION_WRITE_ENCRYPTED,
         )
 
         val tx = BluetoothGattCharacteristic(
             BleProtocol.TX_UUID,
             BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-            BluetoothGattCharacteristic.PERMISSION_READ,
+            BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED,
         ).apply {
             // Without a CCCD the central has no way to subscribe to notifications.
             addDescriptor(
                 BluetoothGattDescriptor(
                     BleProtocol.CCCD_UUID,
-                    BluetoothGattDescriptor.PERMISSION_READ or
-                        BluetoothGattDescriptor.PERMISSION_WRITE,
+                    // Subscribing is what exposes notification content, so the
+                    // descriptor is gated on an encrypted link too.
+                    BluetoothGattDescriptor.PERMISSION_READ_ENCRYPTED or
+                        BluetoothGattDescriptor.PERMISSION_WRITE_ENCRYPTED,
                 )
             )
         }
@@ -200,6 +212,7 @@ class BleLinkService : Service() {
                 devices.remove(address)
                 subscribers.remove(address)
                 reassemblers.remove(address)
+                authenticated.remove(address)
                 update { it.copy(connectedWatch = null) }
             }
         }
@@ -260,16 +273,20 @@ class BleLinkService : Service() {
     // ---- Message handling --------------------------------------------------
 
     private fun handle(device: BluetoothDevice, json: String) {
-        when (val message = BleProtocol.decode(json)) {
-            is BleProtocol.Inbound.Hello -> {
-                val token = trustPrefs.getString(KEY_TOKEN, null)
-                    ?: UUID.randomUUID().toString().also {
-                        trustPrefs.edit().putString(KEY_TOKEN, it).apply()
-                    }
-                update { it.copy(connectedWatch = message.watchName) }
-                RelayLog.record(RelayLog.Outcome.SENT, "Watch link", "${message.watchName} connected")
-                send(device, BleProtocol.welcome(Build.MODEL ?: "Android", token))
-            }
+        val message = BleProtocol.decode(json)
+
+        // A handshake is the only thing entertained from an unverified peer.
+        if (message !is BleProtocol.Inbound.Hello && device.address !in authenticated) {
+            RelayLog.record(
+                RelayLog.Outcome.SKIPPED,
+                "Watch link",
+                "Ignored a message from an unpaired device",
+            )
+            return
+        }
+
+        when (message) {
+            is BleProtocol.Inbound.Hello -> handleHello(device, message)
 
             is BleProtocol.Inbound.Health -> {
                 HealthStore.get(this).record(message.samples)
@@ -306,9 +323,48 @@ class BleLinkService : Service() {
                 send(device, BleProtocol.ack(message.notificationId))
             }
 
-            BleProtocol.Inbound.Unknown ->
-                Log.w(TAG, "Unrecognised message from ${device.address}")
+            BleProtocol.Inbound.Unknown -> Log.w(TAG, "Unrecognised message from a peer")
         }
+    }
+
+    /**
+     * Trust on first use: the first watch to say hello is issued a token and
+     * remembered. Afterwards a peer must present that token, so a second device
+     * in range cannot quietly take the watch's place.
+     *
+     * "Forget this watch" on the Watch tab clears the token when you genuinely
+     * want to pair a different one.
+     */
+    private fun handleHello(device: BluetoothDevice, message: BleProtocol.Inbound.Hello) {
+        val known = trustPrefs.getString(KEY_TOKEN, null)
+
+        if (known != null && message.token != known) {
+            authenticated.remove(device.address)
+            RelayLog.record(
+                RelayLog.Outcome.FAILED,
+                "Watch link",
+                "Refused a device that is not your paired watch",
+                "Use \"Forget this watch\" on the Watch tab if you meant to pair a new one.",
+            )
+            return
+        }
+
+        val token = known ?: java.util.UUID.randomUUID().toString().also {
+            trustPrefs.edit().putString(KEY_TOKEN, it).apply()
+        }
+
+        authenticated.add(device.address)
+        update { it.copy(connectedWatch = message.watchName) }
+        RelayLog.record(
+            RelayLog.Outcome.SENT,
+            "Watch link",
+            if (known == null) {
+                "Paired with ${message.watchName}"
+            } else {
+                "${message.watchName} connected"
+            },
+        )
+        send(device, BleProtocol.welcome(Build.MODEL ?: "Android", token))
     }
 
     @SuppressLint("MissingPermission")
@@ -330,16 +386,29 @@ class BleLinkService : Service() {
         update { it.copy(messagesOut = it.messagesOut + 1) }
     }
 
-    /** Pushes a notification to every subscribed watch. Returns true if any got it. */
+    /**
+     * Pushes a notification to every verified, subscribed watch. Returns true
+     * only if at least one received it, which is what tells the relay whether
+     * it still needs to fall back to email.
+     */
     fun broadcast(message: ByteArray): Boolean {
         val targets = synchronized(subscribers) { subscribers.keys.toList() }
         var delivered = false
         for (address in targets) {
+            if (address !in authenticated) continue
             val device = devices[address] ?: continue
             send(device, message)
             delivered = true
         }
         return delivered
+    }
+
+    /** Drops the remembered watch so a different one can pair. */
+    fun forgetPairedWatch() {
+        trustPrefs.edit().remove(KEY_TOKEN).apply()
+        authenticated.clear()
+        update { it.copy(connectedWatch = null) }
+        RelayLog.record(RelayLog.Outcome.SENT, "Watch link", "Forgot the paired watch")
     }
 
     // ---- Foreground notification ------------------------------------------

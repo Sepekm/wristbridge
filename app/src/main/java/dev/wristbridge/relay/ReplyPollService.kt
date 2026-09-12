@@ -103,17 +103,35 @@ class ReplyPollService : Service() {
             for (uid in candidates) {
                 highest = maxOf(highest, uid)
                 val message = session.fetch(uid) ?: continue
-                handleReply(message)
+                handleReply(message, config)
                 session.markSeen(uid)
             }
             watermarkPrefs.edit().putLong(KEY_WATERMARK, highest).apply()
         }
     }
 
-    private fun handleReply(message: ImapClient.Message) {
+    private fun handleReply(message: ImapClient.Message, config: Settings.Snapshot) {
         val token = TOKEN_PATTERN.find(message.inReplyTo.orEmpty())?.groupValues?.get(1)
         if (token == null) {
             Log.w(TAG, "Reply with no usable token")
+            return
+        }
+
+        // Only act on replies the account owner wrote. Without this, anyone who
+        // came by a relayed notification, through a forward or a shared screen,
+        // could reply to it and have their words sent onward as you.
+        val sender = ImapClient.addressOf(message.from)
+        val permitted = setOf(
+            config.account.lowercase(),
+            config.effectiveDestination.lowercase(),
+        )
+        if (sender == null || sender !in permitted) {
+            RelayLog.record(
+                RelayLog.Outcome.SKIPPED,
+                "Reply channel",
+                "Ignored a reply from ${sender ?: "an unknown sender"}",
+                "Replies are only acted on when they come from your own account.",
+            )
             return
         }
 

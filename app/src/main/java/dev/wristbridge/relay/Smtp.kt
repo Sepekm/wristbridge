@@ -17,6 +17,16 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
 /**
+ * Strips anything that could terminate an SMTP command or a header line.
+ *
+ * A stray CR or LF inside an address would otherwise let the remainder of the
+ * string be read as a fresh command, which is the classic header-injection
+ * shape. Angle brackets go too, since the caller adds its own.
+ */
+internal fun sanitizeAddress(value: String): String =
+    value.filterNot { it == '\r' || it == '\n' || it == '<' || it == '>' }.trim()
+
+/**
  * A minimal SMTP client speaking just enough of RFC 5321 to submit mail to
  * iCloud, with no third-party mail dependency.
  *
@@ -90,9 +100,9 @@ class SmtpClient(
 
     fun send(message: OutgoingMail) {
         session { s ->
-            s.command("MAIL FROM:<${message.from}>", 250)
+            s.command("MAIL FROM:<${sanitizeAddress(message.from)}>", 250)
             for (recipient in message.to) {
-                s.command("RCPT TO:<$recipient>", 250, 251)
+                s.command("RCPT TO:<${sanitizeAddress(recipient)}>", 250, 251)
             }
             s.command("DATA", 354)
             s.output.write(message.render().toByteArray(StandardCharsets.UTF_8))
@@ -217,8 +227,11 @@ data class OutgoingMail(
     fun render(): String {
         val localPart = replyToken ?: java.util.UUID.randomUUID().toString()
         val headers = buildString {
-            append("From: ").append(encodeDisplayName(fromDisplayName)).append(" <").append(from).append(">\r\n")
-            append("To: ").append(to.joinToString(", ") { "<$it>" }).append("\r\n")
+            append("From: ").append(encodeDisplayName(fromDisplayName))
+                .append(" <").append(sanitizeAddress(from)).append(">\r\n")
+            append("To: ")
+                .append(to.joinToString(", ") { "<${sanitizeAddress(it)}>" })
+                .append("\r\n")
             append("Subject: ").append(encodeHeaderValue(subject)).append("\r\n")
             append("Date: ").append(rfc5322Date(sentAt)).append("\r\n")
             append("Message-ID: <").append(localPart).append("@")
