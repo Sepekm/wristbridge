@@ -51,11 +51,16 @@ object NotificationMapper {
 
         if (title.isEmpty() && text.isEmpty()) return null
 
+        // Any app on the phone chooses these strings, and nothing obliges it to
+        // be reasonable. Unbounded, one notification could become a megabyte of
+        // mail, sit in the de-duplication map at that size, and burn a day's
+        // sending allowance on a message iCloud would refuse anyway. The limits
+        // are far above anything a real notification carries.
         return Extracted(
             packageName = sbn.packageName,
-            appLabel = appLabel,
-            title = title,
-            text = text,
+            appLabel = appLabel.take(MAX_LABEL_CHARS),
+            title = title.take(MAX_TITLE_CHARS),
+            text = text.take(MAX_TEXT_CHARS),
             postedAt = Date(sbn.postTime.takeIf { it > 0 } ?: System.currentTimeMillis()),
         )
     }
@@ -124,6 +129,11 @@ object NotificationMapper {
      * watch shows far less than this.
      */
     private const val SUBJECT_LIMIT = 180
+
+    /** Ceilings on text supplied by whichever app posted the notification. */
+    private const val MAX_TITLE_CHARS = 200
+    private const val MAX_TEXT_CHARS = 5_000
+    private const val MAX_LABEL_CHARS = 100
 
     private val TIME_FORMAT: SimpleDateFormat
         get() = SimpleDateFormat("HH:mm", Locale.getDefault())

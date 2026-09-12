@@ -1,6 +1,7 @@
 package dev.wristbridge.relay
 
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import java.util.Base64
 
 /**
@@ -15,9 +16,15 @@ object MimeText {
     /**
      * Takes a raw IMAP FETCH response and returns the decoded, de-quoted reply.
      */
-    fun extractPlainText(fetchResponse: String): String {
+    /**
+     * @param messageHeaders the message's own headers, fetched separately.
+     *        IMAP's BODY[TEXT] excludes them, so a single-part body would
+     *        otherwise give no way to tell how it was encoded and
+     *        quoted-printable escapes would survive into the reply verbatim.
+     */
+    fun extractPlainText(fetchResponse: String, messageHeaders: String = ""): String {
         val raw = literalPayload(fetchResponse)
-        val part = preferredTextPart(raw)
+        val part = preferredTextPart(raw, messageHeaders)
         return stripQuotedReply(part).trim()
     }
 
@@ -42,9 +49,16 @@ object MimeText {
      * back to treating the whole payload as text when there are no boundaries,
      * which is what a plain-text-only reply looks like.
      */
-    private fun preferredTextPart(raw: String): String {
-        val boundary = detectBoundary(raw)
-            ?: return decode(raw, guessEncoding(raw))
+    private fun preferredTextPart(raw: String, messageHeaders: String): String {
+        val boundary = detectBoundary(raw) ?: detectBoundary(messageHeaders)
+        if (boundary == null) {
+            // No parts, so the message's own headers describe the whole body.
+            // Falling back to the payload keeps older callers working.
+            val encoding = CONTENT_TRANSFER_ENCODING.find(messageHeaders)
+                ?.groupValues?.get(1)?.trim()?.lowercase(Locale.ROOT)
+                ?: guessEncoding(raw)
+            return decode(raw, encoding)
+        }
 
         val sections = raw.split("--$boundary")
         val plain = sections.firstOrNull { section ->
@@ -80,7 +94,11 @@ object MimeText {
     }
 
     private fun guessEncoding(headers: String): String =
-        CONTENT_TRANSFER_ENCODING.find(headers)?.groupValues?.get(1)?.trim()?.lowercase()
+        // Locale.ROOT: a Turkish device folds the I in "QUOTED-PRINTABLE" to a
+        // dotless character, the comparison below then fails, and the reply
+        // arrives as undecoded mojibake.
+        CONTENT_TRANSFER_ENCODING.find(headers)?.groupValues?.get(1)?.trim()
+            ?.lowercase(Locale.ROOT)
             ?: "7bit"
 
     private fun decode(content: String, encoding: String): String = when (encoding) {

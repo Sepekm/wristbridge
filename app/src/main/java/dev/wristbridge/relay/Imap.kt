@@ -7,6 +7,7 @@ import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
@@ -53,11 +54,22 @@ class ImapClient(
                 if (b == -1) return if (out.size() == 0) null else out.toString("UTF-8")
                 if (b == '\n'.code) break
                 out.write(b)
+                // A server that never sends a line ending would otherwise grow
+                // this until the process dies.
+                if (out.size() > MAX_LINE_BYTES) {
+                    throw ImapException("Server sent an oversized line; giving up.")
+                }
             }
             return out.toString("UTF-8").removeSuffix("\r")
         }
 
         private fun readExactly(count: Int): String {
+            // The size comes from the server, so it is allocated only after it
+            // has been judged sane. Without this a malformed or hostile literal
+            // header could ask for gigabytes in a single stroke.
+            if (count < 0 || count > MAX_LITERAL_BYTES) {
+                throw ImapException("Server announced an implausible literal of $count bytes.")
+            }
             val buffer = ByteArray(count)
             var read = 0
             while (read < count) {
@@ -81,6 +93,12 @@ class ImapClient(
                 LITERAL_SUFFIX.find(line)?.let { match ->
                     val size = match.groupValues[1].toIntOrNull() ?: 0
                     sb.append(readExactly(size)).append("\n")
+                }
+
+                // A server that never sends the tagged completion would keep
+                // this growing for as long as it cared to talk.
+                if (sb.length > MAX_RESPONSE_CHARS) {
+                    throw ImapException("Server response too large; giving up.")
                 }
 
                 if (line.startsWith("$tag ")) {
@@ -115,8 +133,10 @@ class ImapClient(
             }
         }
 
-        fun selectInbox() {
-            command("SELECT INBOX")
+        /** Selects the inbox and returns its UIDVALIDITY, when the server states one. */
+        fun selectInbox(): Long? {
+            val response = command("SELECT INBOX")
+            return UID_VALIDITY.find(response)?.groupValues?.get(1)?.toLongOrNull()
         }
 
         /**
@@ -137,14 +157,18 @@ class ImapClient(
 
         fun fetch(uid: Long): Message? {
             val headers = command(
-                "UID FETCH $uid (BODY.PEEK[HEADER.FIELDS (IN-REPLY-TO SUBJECT FROM)])"
+                "UID FETCH $uid (BODY.PEEK[HEADER.FIELDS " +
+                    "(IN-REPLY-TO SUBJECT FROM CONTENT-TYPE CONTENT-TRANSFER-ENCODING)])"
             )
             val body = command("UID FETCH $uid (BODY.PEEK[TEXT])")
 
             val inReplyTo = HEADER_IN_REPLY_TO.find(headers)?.groupValues?.get(1)?.trim()
             val subject = HEADER_SUBJECT.find(headers)?.groupValues?.get(1)?.trim()
             val from = HEADER_FROM.find(headers)?.groupValues?.get(1)?.trim()
-            val text = MimeText.extractPlainText(body)
+            // The top-level headers travel separately from BODY[TEXT], so they
+            // are handed over as the fallback for a body with no MIME parts of
+            // its own to describe it.
+            val text = MimeText.extractPlainText(body, messageHeaders = headers)
 
             if (inReplyTo.isNullOrBlank()) return null
             return Message(uid, inReplyTo, subject, from, text)
@@ -202,6 +226,20 @@ class ImapClient(
         /** Matches the Message-ID domain [OutgoingMail] stamps on every relay. */
         const val MESSAGE_ID_DOMAIN = "wristbridge.local"
 
+        /**
+         * Ceilings on anything the far end gets to size.
+         *
+         * The link is TLS-verified to Apple, so these are not expected to fire.
+         * They exist so a malformed or hostile response fails loudly rather
+         * than exhausting memory on the user's phone.
+         */
+        /** SELECT reports the mailbox's UIDVALIDITY in an untagged OK response. */
+        private val UID_VALIDITY = Regex("""(?i)\[UIDVALIDITY\s+(\d+)]""")
+
+        private const val MAX_LINE_BYTES = 64 * 1024
+        private const val MAX_LITERAL_BYTES = 1024 * 1024
+        private const val MAX_RESPONSE_CHARS = 4 * 1024 * 1024
+
         private val LITERAL_SUFFIX = Regex("""\{(\d+)}$""")
         private val HEADER_IN_REPLY_TO =
             Regex("""(?im)^In-Reply-To:\s*(.+)$""")
@@ -216,7 +254,10 @@ class ImapClient(
         fun addressOf(header: String?): String? {
             if (header.isNullOrBlank()) return null
             val angled = ANGLE_ADDRESS.find(header)?.groupValues?.get(1)
-            return (angled ?: header).trim().trim('"').trim().lowercase()
+            // Locale.ROOT, not the device locale: in Turkish "I" folds to a
+            // dotless "ı", so a default-locale fold would stop an address
+            // matching itself and quietly disable the reply channel.
+            return (angled ?: header).trim().trim('"').trim().lowercase(Locale.ROOT)
         }
 
         fun quote(value: String): String =

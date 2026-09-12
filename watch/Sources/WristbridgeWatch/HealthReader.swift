@@ -45,6 +45,7 @@ final class HealthReader: ObservableObject {
         add(.restingHeartRate, HKUnit.count().unitDivided(by: .minute()), "restingHeartRate")
         add(.stepCount, .count(), "steps")
         add(.activeEnergyBurned, .kilocalorie(), "activeEnergy")
+        // Read as a fraction and scaled below; see collectNewSamples.
         add(.oxygenSaturation, .percent(), "oxygenSaturation")
         add(.appleExerciseTime, .minute(), "exerciseMinutes")
         add(.appleStandTime, .minute(), "standHours")
@@ -87,10 +88,15 @@ final class HealthReader: ObservableObject {
             let samples = await query(type: type, from: since, to: until)
             collected += samples.compactMap { sample in
                 guard let quantity = sample as? HKQuantitySample else { return nil }
+                let raw = quantity.quantity.doubleValue(for: unit)
+                // HKUnit.percent() is a fraction, so a 98% reading comes back
+                // as 0.98. Sent unscaled the phone would display "1 %".
+                let value = kind == "oxygenSaturation" ? raw * 100 : raw
+                let label = kind == "oxygenSaturation" ? "%" : unit.unitString
                 return HealthSample(
                     kind: kind,
-                    value: quantity.quantity.doubleValue(for: unit),
-                    unit: unit.unitString,
+                    value: value,
+                    unit: label,
                     start: quantity.startDate,
                     end: quantity.endDate
                 )
@@ -114,7 +120,13 @@ final class HealthReader: ObservableObject {
      left behind, and moving to the wall clock would silently skip it.
      */
     func markDelivered(_ samples: [HealthSample]) {
-        guard let newest = samples.map({ $0.end }).max() else { return }
+        // Deliberately the latest *start*, matching the predicate below, which
+        // selects on startDate. Using the latest end would carry the marker
+        // past the whole span of a long sample such as a workout or a night's
+        // sleep, and everything recorded inside that span would never be read.
+        // A sample landing exactly on the boundary may be re-sent; the phone
+        // discards repeats by (kind, start).
+        guard let newest = samples.map({ $0.start }).max() else { return }
         if newest > watermark {
             watermark = newest
         }

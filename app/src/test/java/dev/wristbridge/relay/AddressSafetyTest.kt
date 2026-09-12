@@ -3,6 +3,7 @@ package dev.wristbridge.relay
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.util.Locale
 
 /**
  * Covers the two places a hostile or malformed address could change behaviour:
@@ -75,6 +76,56 @@ class AddressSafetyTest {
     fun `missing header yields null so the reply is refused`() {
         assertNull(ImapClient.addressOf(null))
         assertNull(ImapClient.addressOf("   "))
+    }
+
+    @Test
+    fun `address folding is unaffected by a Turkish device locale`() {
+        // Turkish folds "I" to a dotless "ı". With the device locale, an address
+        // containing a capital I would stop matching itself and the reply
+        // channel would silently refuse every reply on such a phone.
+        val original = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr"))
+            assertEquals("ian@icloud.com", ImapClient.addressOf("IAN@ICLOUD.COM"))
+            assertEquals(
+                "kristina.i@icloud.com",
+                ImapClient.addressOf("Kristina <Kristina.I@iCloud.com>"),
+            )
+        } finally {
+            Locale.setDefault(original)
+        }
+    }
+
+    @Test
+    fun `quoted-printable is recognised under a Turkish locale`() {
+        // "QUOTED-PRINTABLE" contains an I, so the same trap applies to the
+        // transfer-encoding lookup; missing it leaves the reply as mojibake.
+        val original = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr"))
+            // Realistic shape: BODY[TEXT] carries no headers at all, and the
+            // encoding is only knowable from the separately fetched headers.
+            val body = """
+                * 2 FETCH (UID 2 BODY[TEXT] {40}
+                On my way=E2=80=A6 ten minutes.
+                )
+                a0002 OK FETCH completed
+            """.trimIndent()
+            val headers = """
+                * 2 FETCH (UID 2 BODY[HEADER.FIELDS (...)] {120}
+                Subject: Re: Signal
+                Content-Type: text/plain; charset=utf-8
+                Content-Transfer-Encoding: QUOTED-PRINTABLE
+                )
+                a0001 OK FETCH completed
+            """.trimIndent()
+            assertEquals(
+                "On my way… ten minutes.",
+                MimeText.extractPlainText(body, messageHeaders = headers),
+            )
+        } finally {
+            Locale.setDefault(original)
+        }
     }
 
     @Test

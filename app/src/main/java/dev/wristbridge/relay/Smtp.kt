@@ -254,14 +254,59 @@ data class OutgoingMail(
         fun rfc5322Date(date: Date): String = DATE_FORMAT.format(date)
 
         /**
+         * Maximum UTF-8 bytes per encoded-word.
+         *
+         * RFC 2047 caps an encoded-word at 75 characters. The `=?UTF-8?B?` and
+         * `?=` wrapper costs 12, leaving 63 for base64, and base64 expands three
+         * bytes into four, so 45 bytes is the largest clean fit.
+         */
+        private const val MAX_ENCODED_WORD_BYTES = 45
+
+        /**
          * RFC 2047 encoded-word, so emoji and non-Latin scripts survive the
          * header. Plain-ASCII values are left readable.
+         *
+         * Long values are split across several encoded-words and folded, rather
+         * than emitted as one oversized word: a single emoji in a subject of
+         * ordinary length already pushes well past the 75-character limit, and
+         * a strict reader is entitled to mangle what it cannot parse. The split
+         * falls on code-point boundaries because each word has to decode on its
+         * own, so a character may not straddle two of them.
          */
         fun encodeHeaderValue(raw: String): String {
             val cleaned = raw.replace('\r', ' ').replace('\n', ' ').trim()
             if (cleaned.all { it.code in 32..126 }) return cleaned
+
+            val words = mutableListOf<String>()
+            val current = StringBuilder()
+            var currentBytes = 0
+            var index = 0
+
+            while (index < cleaned.length) {
+                val codePoint = cleaned.codePointAt(index)
+                val width = Character.charCount(codePoint)
+                val piece = cleaned.substring(index, index + width)
+                val pieceBytes = piece.toByteArray(StandardCharsets.UTF_8).size
+
+                if (currentBytes + pieceBytes > MAX_ENCODED_WORD_BYTES && current.isNotEmpty()) {
+                    words += encodeWord(current.toString())
+                    current.setLength(0)
+                    currentBytes = 0
+                }
+                current.append(piece)
+                currentBytes += pieceBytes
+                index += width
+            }
+            if (current.isNotEmpty()) words += encodeWord(current.toString())
+
+            // Folding whitespace between adjacent encoded-words is discarded by
+            // the reader, so this reassembles as one continuous value.
+            return words.joinToString("\r\n ")
+        }
+
+        private fun encodeWord(value: String): String {
             val encoded = Base64.getEncoder()
-                .encodeToString(cleaned.toByteArray(StandardCharsets.UTF_8))
+                .encodeToString(value.toByteArray(StandardCharsets.UTF_8))
             return "=?UTF-8?B?$encoded?="
         }
 

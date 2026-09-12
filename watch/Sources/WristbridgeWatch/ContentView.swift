@@ -133,6 +133,7 @@ private struct NotificationDetail: View {
     @EnvironmentObject private var link: BridgeLink
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
+    @State private var failed = false
 
     var body: some View {
         ScrollView {
@@ -151,10 +152,19 @@ private struct NotificationDetail: View {
                     TextField("Reply", text: $draft)
                         .padding(.top, 8)
                     Button("Send") {
-                        link.sendReply(to: item, text: draft)
-                        dismiss()
+                        if link.sendReply(to: item, text: draft) {
+                            dismiss()
+                        } else {
+                            failed = true
+                        }
                     }
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if failed {
+                        Text("No link to your phone just now. The message is still here.")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
                 } else {
                     Text("This notification cannot be replied to.")
                         .font(.footnote)

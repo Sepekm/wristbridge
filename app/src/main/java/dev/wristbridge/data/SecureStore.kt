@@ -59,10 +59,25 @@ object SecureStore {
     private fun keyStore(): KeyStore =
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
+    /**
+     * Synchronized because two threads arriving here at once would each
+     * generate a key under the same alias, and the second would silently
+     * replace the first, leaving whatever the first encrypted undecryptable.
+     */
+    @Synchronized
     private fun secretKey(): SecretKey {
         val store = keyStore()
         (store.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
 
+        // StrongBox puts the key in a separate tamper-resistant chip, which on
+        // a Pixel is the Titan M. Not every device has one, and asking for it
+        // there throws, so the ordinary keystore remains the fallback.
+        generateKey(useStrongBox = true)?.let { return it }
+        return generateKey(useStrongBox = false)
+            ?: error("Could not create a key to protect the stored password")
+    }
+
+    private fun generateKey(useStrongBox: Boolean): SecretKey? = runCatching {
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(
             KeyGenParameterSpec.Builder(
@@ -74,10 +89,11 @@ object SecureStore {
                 // Notifications arrive while the screen is off, so the key must
                 // be usable without the user authenticating first.
                 .setUserAuthenticationRequired(false)
+                .apply { if (useStrongBox) setIsStrongBoxBacked(true) }
                 .build()
         )
-        return generator.generateKey()
-    }
+        generator.generateKey()
+    }.getOrNull()
 
     /** Unused parameter kept so callers can pass a context uniformly. */
     @Suppress("UNUSED_PARAMETER")

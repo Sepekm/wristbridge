@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import dev.wristbridge.data.Settings
+import java.util.Locale
 import dev.wristbridge.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -94,19 +95,48 @@ class ReplyPollService : Service() {
         )
 
         client.withSession { session ->
-            session.selectInbox()
+            val validity = session.selectInbox()
+            resetWatermarkIfMailboxChanged(validity)
+
             val watermark = watermarkPrefs.getLong(KEY_WATERMARK, 0L)
             val candidates = session.findReplies().filter { it > watermark }.sorted()
             if (candidates.isEmpty()) return@withSession
 
-            var highest = watermark
             for (uid in candidates) {
-                highest = maxOf(highest, uid)
-                val message = session.fetch(uid) ?: continue
-                handleReply(message, config)
-                session.markSeen(uid)
+                val message = session.fetch(uid)
+                if (message != null) {
+                    handleReply(message, config)
+                    session.markSeen(uid)
+                }
+                // Recorded per message, not once at the end. If the connection
+                // drops halfway through a batch, the replies already delivered
+                // must not be delivered a second time on the next poll: sending
+                // someone the same message twice is worse than losing one.
+                watermarkPrefs.edit().putLong(KEY_WATERMARK, uid).apply()
             }
-            watermarkPrefs.edit().putLong(KEY_WATERMARK, highest).apply()
+        }
+    }
+
+    /**
+     * IMAP UIDs are only meaningful within one UIDVALIDITY. If the server
+     * reissues it, which happens when a mailbox is recreated, UIDs restart from
+     * a low number and a stale high watermark would hide every future reply for
+     * good. Seeing a new value, the watermark starts over.
+     */
+    private fun resetWatermarkIfMailboxChanged(validity: Long?) {
+        if (validity == null) return
+        val known = watermarkPrefs.getLong(KEY_UID_VALIDITY, 0L)
+        if (known == validity) return
+        watermarkPrefs.edit()
+            .putLong(KEY_UID_VALIDITY, validity)
+            .putLong(KEY_WATERMARK, 0L)
+            .apply()
+        if (known != 0L) {
+            RelayLog.record(
+                RelayLog.Outcome.SKIPPED,
+                "Reply channel",
+                "Mailbox was reset by the server; starting the reply scan over",
+            )
         }
     }
 
@@ -122,8 +152,8 @@ class ReplyPollService : Service() {
         // could reply to it and have their words sent onward as you.
         val sender = ImapClient.addressOf(message.from)
         val permitted = setOf(
-            config.account.lowercase(),
-            config.effectiveDestination.lowercase(),
+            config.account.lowercase(Locale.ROOT),
+            config.effectiveDestination.lowercase(Locale.ROOT),
         )
         if (sender == null || sender !in permitted) {
             RelayLog.record(
@@ -196,6 +226,7 @@ class ReplyPollService : Service() {
         private const val CHANNEL_ID = "wristbridge.replies"
         private const val NOTIFICATION_ID = 4711
         private const val KEY_WATERMARK = "highest_handled_uid"
+        private const val KEY_UID_VALIDITY = "uid_validity"
 
         /** Pulls the token out of "<token@wristbridge.local>". */
         private val TOKEN_PATTERN =

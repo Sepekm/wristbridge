@@ -158,6 +158,75 @@ class MimeTextTest {
     }
 
     @Test
+    fun `single-part quoted-printable decodes using the separately fetched headers`() {
+        // IMAP's BODY[TEXT] omits the message headers, so for a reply with no
+        // MIME parts the encoding is only discoverable from the header fetch.
+        // Without it the escapes below would be sent onward verbatim.
+        val body = """
+            * 9 FETCH (UID 90 BODY[TEXT] {44}
+            Caf=C3=A9 at six, bring the=
+             umbrella.
+            )
+            a0009 OK FETCH completed
+        """.trimIndent()
+        val headers = """
+            * 9 FETCH (UID 90 BODY[HEADER.FIELDS (...)] {90}
+            From: me@icloud.com
+            Content-Transfer-Encoding: quoted-printable
+            )
+            a0008 OK FETCH completed
+        """.trimIndent()
+
+        assertEquals(
+            "Café at six, bring the umbrella.",
+            MimeText.extractPlainText(body, messageHeaders = headers),
+        )
+    }
+
+    @Test
+    fun `single-part base64 decodes using the separately fetched headers`() {
+        val encoded = java.util.Base64.getEncoder()
+            .encodeToString("On the train 🚆".toByteArray(Charsets.UTF_8))
+        val body = """
+            * 10 FETCH (UID 100 BODY[TEXT] {40}
+            $encoded
+            )
+            a0010 OK FETCH completed
+        """.trimIndent()
+        val headers = """
+            * 10 FETCH (UID 100 BODY[HEADER.FIELDS (...)] {60}
+            Content-Transfer-Encoding: base64
+            )
+            a0009 OK FETCH completed
+        """.trimIndent()
+
+        assertEquals(
+            "On the train 🚆",
+            MimeText.extractPlainText(body, messageHeaders = headers),
+        )
+    }
+
+    @Test
+    fun `a multipart body still wins over the message headers`() {
+        // A multipart message declares 7bit at the top level while its parts
+        // carry their own encoding; the part must take precedence.
+        val body = """
+            * 11 FETCH (UID 110 BODY[TEXT] {200}
+            --b9
+            Content-Type: text/plain; charset=utf-8
+            Content-Transfer-Encoding: quoted-printable
+
+            Caf=C3=A9 time
+            --b9--
+            )
+            a0011 OK FETCH completed
+        """.trimIndent()
+        val headers = "Content-Transfer-Encoding: 7bit"
+
+        assertEquals("Café time", MimeText.extractPlainText(body, messageHeaders = headers))
+    }
+
+    @Test
     fun `empty reply does not crash`() {
         val response = "* 1 FETCH (UID 1 BODY[TEXT] {0}\n\n)\na0001 OK FETCH completed"
         assertTrue(MimeText.extractPlainText(response).isEmpty())

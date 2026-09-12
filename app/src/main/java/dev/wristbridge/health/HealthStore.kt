@@ -49,7 +49,7 @@ class HealthStore private constructor(context: Context) {
             OXYGEN_SATURATION -> "Blood oxygen"
             SLEEP -> "Sleep"
             WORKOUT -> "Workout"
-            STAND_HOURS -> "Stand hours"
+            STAND_HOURS -> "Stand time"
             EXERCISE_MINUTES -> "Exercise minutes"
             else -> kind.replaceFirstChar(Char::uppercase)
         }

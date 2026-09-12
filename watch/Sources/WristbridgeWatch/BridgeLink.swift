@@ -64,13 +64,16 @@ final class BridgeLink: NSObject, ObservableObject {
 
     // MARK: - Sending
 
-    func send(_ message: Data) {
-        guard let peripheral, let rxCharacteristic else { return }
+    /// Returns false when there is nothing to write to.
+    @discardableResult
+    func send(_ message: Data) -> Bool {
+        guard let peripheral, let rxCharacteristic else { return false }
         // withResponse gives flow control; without it a burst of chunks can be
         // silently dropped when the phone's buffer fills.
         for piece in WireProtocol.chunk(message, payloadSize: payloadSize) {
             peripheral.writeValue(piece, for: rxCharacteristic, type: .withResponse)
         }
+        return true
     }
 
     /// Returns false when there is no usable link, so the caller knows the
@@ -87,13 +90,14 @@ final class BridgeLink: NSObject, ObservableObject {
         return true
     }
 
-    func sendReply(to notification: BridgedNotification, text: String) {
-        send(WireProtocol.reply(notificationID: notification.id, text: text))
-        notifications.removeAll { $0.id == notification.id }
-    }
-
-    func clearNotifications() {
-        notifications.removeAll()
+    /// Returns false when there is no link to write to, so the caller can say
+    /// so rather than leaving the impression the reply went.
+    @discardableResult
+    func sendReply(to notification: BridgedNotification, text: String) -> Bool {
+        // The notification stays on the list until the phone acknowledges it.
+        // Removing it here would make a reply written out of range look sent,
+        // with nothing left on screen to retry from.
+        return send(WireProtocol.reply(notificationID: notification.id, text: text))
     }
 
     // MARK: - Inbound
@@ -101,6 +105,18 @@ final class BridgeLink: NSObject, ObservableObject {
     private func handle(_ data: Data) {
         switch WireProtocol.decode(data) {
         case let .welcome(name, token):
+            // Authentication runs both ways. The phone checks the token the
+            // watch presents; this is the other half. A service UUID is public,
+            // so anything nearby can advertise one and wait to be connected to.
+            // Without this check such a peer could feed the watch invented
+            // notifications and be handed health data and replies in return.
+            if let known = pairingToken, !known.isEmpty, token != known {
+                state = .failed("This is not the phone you paired with")
+                if let peripheral {
+                    central?.cancelPeripheralConnection(peripheral)
+                }
+                return
+            }
             if !token.isEmpty { pairingToken = token }
             state = .connected(phone: name)
 

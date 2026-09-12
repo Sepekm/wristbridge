@@ -31,6 +31,8 @@ import dev.wristbridge.relay.ReplyRegistry
 import dev.wristbridge.ui.MainActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import java.security.MessageDigest
 import java.util.Collections
 import java.util.UUID
 
@@ -59,6 +61,10 @@ class BleLinkService : Service() {
     private var gattServer: BluetoothGattServer? = null
     private var advertiser: BluetoothLeAdvertiser? = null
     private var txCharacteristic: BluetoothGattCharacteristic? = null
+
+    /** Held until onServiceAdded confirms the GATT service is registered. */
+    private var advertiseSettings: AdvertiseSettings? = null
+    private var advertiseData: AdvertiseData? = null
 
     /** Peers that have enabled notifications on the TX characteristic. */
     private val subscribers = Collections.synchronizedSet(HashSet<String>())
@@ -105,7 +111,15 @@ class BleLinkService : Service() {
 
     @SuppressLint("MissingPermission")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification())
+        // Android restarts this after a process kill. If the Bluetooth grant
+        // was revoked meanwhile, startForeground refuses, and an uncaught
+        // throw here would crash the app rather than simply stopping the link.
+        val started = runCatching { startForeground(NOTIFICATION_ID, buildNotification()) }
+        if (started.isFailure) {
+            update { it.copy(lastError = "Missing permission to run the watch link") }
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (gattServer == null) start()
         return START_STICKY
     }
@@ -175,7 +189,6 @@ class BleLinkService : Service() {
 
         service.addCharacteristic(rx)
         service.addCharacteristic(tx)
-        server.addService(service)
         txCharacteristic = tx
 
         advertiser = adapter.bluetoothLeAdvertiser
@@ -190,15 +203,21 @@ class BleLinkService : Service() {
             .setConnectable(true)
             .build()
 
-        // The name is carried in the scan response: the 31-byte advertisement
-        // is already spent on the 128-bit service UUID.
+        // Deliberately carries no device name. A phone's Bluetooth name is
+        // frequently the owner's own ("Marek's Pixel"), and broadcasting it
+        // continuously to anyone scanning is a needless disclosure: the watch
+        // learns the phone's name from the welcome message, over an encrypted
+        // link, after it has proved who it is.
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
             .addServiceUuid(ParcelUuid(BleProtocol.SERVICE_UUID))
             .build()
-        val scanResponse = AdvertiseData.Builder().setIncludeDeviceName(true).build()
 
-        advertiser?.startAdvertising(settings, data, scanResponse, advertiseCallback)
+        advertiseSettings = settings
+        advertiseData = data
+        server.addService(service)
+        // Advertising starts in onServiceAdded. Beginning here would let a
+        // central connect before the service exists and find nothing.
     }
 
     private val advertiseCallback = object : AdvertiseCallback() {
@@ -222,6 +241,17 @@ class BleLinkService : Service() {
     // ---- GATT server callbacks --------------------------------------------
 
     private val serverCallback = object : BluetoothGattServerCallback() {
+
+        @SuppressLint("MissingPermission")
+        override fun onServiceAdded(status: Int, service: BluetoothGattService?) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                update { it.copy(lastError = "Could not register the bridge service") }
+                return
+            }
+            val settings = advertiseSettings ?: return
+            val data = advertiseData ?: return
+            runCatching { advertiser?.startAdvertising(settings, data, advertiseCallback) }
+        }
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(device: BluetoothDevice?, status: Int, newState: Int) {
@@ -268,6 +298,16 @@ class BleLinkService : Service() {
             offset: Int,
             value: ByteArray?,
         ) {
+            if (preparedWrite) {
+                // Not supported, and silently accepting one would hand a
+                // fragment to the reassembler as though it were whole.
+                if (responseNeeded) {
+                    gattServer?.sendResponse(
+                        device, requestId, BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED, offset, null
+                    )
+                }
+                return
+            }
             if (responseNeeded) {
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
             }
@@ -373,7 +413,13 @@ class BleLinkService : Service() {
     private fun handleHello(device: BluetoothDevice, message: BleProtocol.Inbound.Hello) {
         val known = trustPrefs.getString(KEY_TOKEN, null)
 
-        if (known != null && message.token != known) {
+        val presented = message.token
+        val tokenMatches = known != null && presented != null &&
+            MessageDigest.isEqual(
+                known.toByteArray(Charsets.UTF_8),
+                presented.toByteArray(Charsets.UTF_8),
+            )
+        if (known != null && !tokenMatches) {
             authenticated.remove(device.address)
             RelayLog.record(
                 RelayLog.Outcome.FAILED,
@@ -402,7 +448,8 @@ class BleLinkService : Service() {
         send(device, BleProtocol.welcome(Build.MODEL ?: "Android", token))
     }
 
-    private fun send(device: BluetoothDevice, message: ByteArray) {
+    /** Returns false when the message could not be queued, so it was not sent. */
+    private fun send(device: BluetoothDevice, message: ByteArray): Boolean {
         val address = device.address
         val payload = payloadSizes[address] ?: DEFAULT_PAYLOAD
         val chunks = BleProtocol.chunk(message, payload)
@@ -411,18 +458,20 @@ class BleLinkService : Service() {
             val queue = outbound.getOrPut(address) { ArrayDeque() }
             if (queue.size + chunks.size > MAX_QUEUED_CHUNKS) {
                 // The peer has stopped acknowledging. Dropping is better than
-                // growing without bound, and the mail relay is the fallback.
+                // growing without bound, and the mail relay is the fallback,
+                // which is why the caller has to learn this failed.
                 RelayLog.record(
                     RelayLog.Outcome.SKIPPED,
                     "Watch link",
                     "Dropped a message; the watch is not keeping up",
                 )
-                return
+                return false
             }
             queue.addAll(chunks)
         }
         update { it.copy(messagesOut = it.messagesOut + 1) }
         pump(address)
+        return true
     }
 
     /**
@@ -475,8 +524,7 @@ class BleLinkService : Service() {
         for (address in targets) {
             if (address !in authenticated) continue
             val device = devices[address] ?: continue
-            send(device, message)
-            delivered = true
+            if (send(device, message)) delivered = true
         }
         return delivered
     }
@@ -513,7 +561,9 @@ class BleLinkService : Service() {
     }
 
     private fun update(transform: (LinkState) -> LinkState) {
-        state.value = transform(state.value)
+        // update(), not value =, because binder callbacks and the UI thread
+        // both land here and a read-modify-write would drop one.
+        state.update(transform)
     }
 
     companion object {

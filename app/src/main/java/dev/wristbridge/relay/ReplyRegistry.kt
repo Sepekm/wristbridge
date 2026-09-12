@@ -26,6 +26,12 @@ object ReplyRegistry {
     private const val MAX_ENTRIES = 200
     private const val EXPIRY_MS = 24 * 60 * 60 * 1000L
 
+    /**
+     * Far longer than anything anyone dictates to a watch, and far short of
+     * the Binder transaction limit a reply has to cross.
+     */
+    private const val MAX_REPLY_CHARS = 4000
+
     data class Pending(
         val token: String,
         val packageName: String,
@@ -62,15 +68,6 @@ object ReplyRegistry {
         return entries.remove(token)
     }
 
-    @Synchronized
-    fun size(): Int {
-        prune()
-        return entries.size
-    }
-
-    @Synchronized
-    fun clear() = entries.clear()
-
     private fun prune() {
         val cutoff = System.currentTimeMillis() - EXPIRY_MS
         entries.entries.removeAll { it.value.createdAt < cutoff }
@@ -96,10 +93,17 @@ object ReplyRegistry {
         val target = pending.action.actionIntent
             ?: return "Notification no longer accepts replies"
 
+        // The reply arrives from off-device, so its length is not ours to
+        // trust. Everything here crosses a Binder transaction, which has a
+        // hard limit of about a megabyte shared with everything else in
+        // flight; overrunning it throws from deep inside the system, on
+        // whichever thread called us. No real reply approaches this.
+        val bounded = if (text.length > MAX_REPLY_CHARS) text.take(MAX_REPLY_CHARS) else text
+
         val intent = Intent()
         val results = Bundle()
         for (input in remoteInputs) {
-            results.putCharSequence(input.resultKey, text)
+            results.putCharSequence(input.resultKey, bounded)
         }
         RemoteInput.addResultsToIntent(remoteInputs, intent, results)
         RemoteInput.setResultsSource(intent, RemoteInput.SOURCE_FREE_FORM_INPUT)
@@ -112,6 +116,10 @@ object ReplyRegistry {
             "The original notification is gone, so ${pending.appLabel} would not accept it"
         } catch (e: SecurityException) {
             "${pending.appLabel} refused the reply: ${e.message}"
+        } catch (e: Exception) {
+            // One of these runs on a Bluetooth callback thread, where an escaping
+            // exception takes the process down rather than failing one reply.
+            "${pending.appLabel} could not accept the reply: ${e.javaClass.simpleName}"
         }
     }
 }
