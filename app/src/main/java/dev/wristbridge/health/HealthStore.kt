@@ -2,6 +2,12 @@ package dev.wristbridge.health
 
 import android.content.Context
 import dev.wristbridge.ble.BleProtocol
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -62,6 +68,9 @@ class HealthStore private constructor(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("wristbridge.health", Context.MODE_PRIVATE)
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var persistJob: Job? = null
+
     private val _samples = MutableStateFlow(load())
     val samples: StateFlow<List<Sample>> = _samples
 
@@ -81,10 +90,27 @@ class HealthStore private constructor(context: Context) {
             val fresh = mapped.filterNot { (it.kind to it.start) in seen }
             (existing + fresh).sortedByDescending { it.start }.take(CAPACITY)
         }
-        persist()
+        schedulePersist()
+    }
+
+    /**
+     * Writes to disk off the caller's thread, coalescing bursts.
+     *
+     * [record] runs on the Bluetooth callback thread, and serialising up to
+     * [CAPACITY] samples there would stall the very callbacks delivering the
+     * rest of the batch. The trade is that an abrupt process kill within the
+     * debounce window loses the last batch, which the watch can resend.
+     */
+    private fun schedulePersist() {
+        persistJob?.cancel()
+        persistJob = scope.launch {
+            delay(PERSIST_DEBOUNCE_MS)
+            persist()
+        }
     }
 
     fun clear() {
+        persistJob?.cancel()
         _samples.value = emptyList()
         prefs.edit().remove(KEY_SAMPLES).apply()
     }
@@ -122,6 +148,9 @@ class HealthStore private constructor(context: Context) {
     companion object {
         private const val KEY_SAMPLES = "samples"
         private const val CAPACITY = 2000
+
+        /** Long enough to fold a burst of batches into one write. */
+        private const val PERSIST_DEBOUNCE_MS = 400L
 
         @Volatile
         private var instance: HealthStore? = null

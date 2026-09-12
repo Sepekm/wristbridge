@@ -9,6 +9,9 @@ name: Build watch app
 #
 # macOS runner minutes bill at ten times the Linux rate on private repos, so
 # this deliberately only runs when the watch app itself changes.
+permissions:
+  contents: read
+
 on:
   push:
     paths:

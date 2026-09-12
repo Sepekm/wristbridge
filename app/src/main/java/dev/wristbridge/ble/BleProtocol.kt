@@ -67,23 +67,27 @@ object BleProtocol {
      * since a shared buffer would interleave two peers' fragments.
      */
     class Reassembler(private val limitBytes: Int = 64 * 1024) {
-        private val buffer = StringBuilder()
-        private var bytes = 0
+        /**
+         * Bytes, deliberately, not a StringBuilder. A UTF-8 character can be up
+         * to four bytes and the chunk boundary falls wherever the MTU puts it,
+         * so decoding each chunk on its own turns any character unlucky enough
+         * to straddle a boundary into replacement characters. Accumulate the
+         * bytes and decode once, when the whole message is present.
+         */
+        private val buffer = java.io.ByteArrayOutputStream()
 
         /** Returns the complete message when the final chunk arrives, else null. */
         fun accept(chunk: ByteArray): String? {
             if (chunk.isEmpty()) return null
-            val body = chunk.copyOfRange(1, chunk.size)
-            bytes += body.size
-            if (bytes > limitBytes) {
+            if (buffer.size() + chunk.size - 1 > limitBytes) {
                 // A peer that never sets the final flag would otherwise grow
                 // this without bound.
                 reset()
                 return null
             }
-            buffer.append(String(body, Charsets.UTF_8))
+            buffer.write(chunk, 1, chunk.size - 1)
             if (chunk[0].toInt() and FLAG_FINAL.toInt() != 0) {
-                val complete = buffer.toString()
+                val complete = buffer.toString(Charsets.UTF_8.name())
                 reset()
                 return complete
             }
@@ -91,8 +95,7 @@ object BleProtocol {
         }
 
         fun reset() {
-            buffer.setLength(0)
-            bytes = 0
+            buffer.reset()
         }
     }
 

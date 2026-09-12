@@ -15,6 +15,9 @@ final class HealthReader: ObservableObject {
 
     private let store = HKHealthStore()
 
+    /** Maximum samples fetched per type per sync. */
+    static let queryLimit = 500
+
     /// Where the last successful read stopped, so each sync only sends what is
     /// new rather than re-uploading the whole history.
     private var watermark: Date {
@@ -97,10 +100,24 @@ final class HealthReader: ObservableObject {
         collected += await collectSleep(from: since, to: until)
         collected += await collectWorkouts(from: since, to: until)
 
-        if !collected.isEmpty {
-            watermark = until
-        }
+        // Deliberately does NOT advance the watermark. If the link drops
+        // mid-send these samples would be skipped for ever; the caller calls
+        // markDelivered only once they are actually on the phone.
         return collected.sorted { $0.start < $1.start }
+    }
+
+    /**
+     Advances the sync point past samples the phone has accepted.
+
+     Takes the newest delivered sample rather than "now", because each query is
+     capped at `queryLimit` per type: on a busy day there can be more history
+     left behind, and moving to the wall clock would silently skip it.
+     */
+    func markDelivered(_ samples: [HealthSample]) {
+        guard let newest = samples.map({ $0.end }).max() else { return }
+        if newest > watermark {
+            watermark = newest
+        }
     }
 
     private func collectSleep(from: Date, to: Date) async -> [HealthSample] {
@@ -154,8 +171,9 @@ final class HealthReader: ObservableObject {
                 sampleType: type,
                 predicate: predicate,
                 // A cap keeps one very active day from producing a payload the
-                // BLE link would spend minutes draining.
-                limit: 500,
+                // BLE link would spend minutes draining. markDelivered accounts
+                // for whatever this leaves behind.
+                limit: Self.queryLimit,
                 sortDescriptors: [sort]
             ) { _, samples, _ in
                 continuation.resume(returning: samples ?? [])

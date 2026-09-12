@@ -99,6 +99,7 @@ class RelayListenerService : NotificationListenerService() {
 
         val now = System.currentTimeMillis()
         val quietWindowMs = config.minQuietSeconds * 1000L
+        pruneDedupeHistory(now, quietWindowMs)
         val previous = lastRelayedAt[extracted.dedupeKey]
         if (previous != null && now - previous < quietWindowMs) {
             RelayLog.record(
@@ -174,6 +175,24 @@ class RelayListenerService : NotificationListenerService() {
         val ranking = Ranking()
         val map = runCatching { currentRanking }.getOrNull() ?: return null
         return if (map.getRanking(sbn.key, ranking)) ranking else null
+    }
+
+    /**
+     * Forgets de-duplication keys once their quiet window has passed.
+     *
+     * Each distinct message adds an entry, so without this a phone left running
+     * for weeks accumulates one per conversation line. Entries are useless once
+     * the window has elapsed, since the next sighting would relay anyway.
+     */
+    private fun pruneDedupeHistory(now: Long, quietWindowMs: Long) {
+        if (lastRelayedAt.size < DEDUPE_PRUNE_THRESHOLD) return
+        val cutoff = now - quietWindowMs.coerceAtLeast(60_000L)
+        lastRelayedAt.entries.removeAll { it.value < cutoff }
+        if (lastRelayedAt.size >= DEDUPE_PRUNE_THRESHOLD) {
+            // Everything is still inside the window, which means a burst rather
+            // than a leak. Drop it wholesale; the cost is a few repeats.
+            lastRelayedAt.clear()
+        }
     }
 
     private fun withinRateLimit(now: Long, maxPerHour: Int): Boolean {
@@ -297,6 +316,9 @@ class RelayListenerService : NotificationListenerService() {
 
         const val ICLOUD_SMTP_HOST = "smtp.mail.me.com"
         const val ICLOUD_SMTP_PORT = 587
+
+        /** Entry count that triggers a sweep of expired de-duplication keys. */
+        private const val DEDUPE_PRUNE_THRESHOLD = 500
 
         private const val MAX_ATTEMPTS = 3
         private const val RETRY_BACKOFF_MS = 2_000L

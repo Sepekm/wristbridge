@@ -71,7 +71,10 @@ struct ContentView: View {
         syncing = true
         defer { syncing = false }
         let samples = await health.collectNewSamples()
-        link.sendHealth(samples)
+        guard !samples.isEmpty else { return }
+        if link.sendHealth(samples) {
+            health.markDelivered(samples)
+        }
     }
 }
 

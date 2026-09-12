@@ -73,14 +73,18 @@ final class BridgeLink: NSObject, ObservableObject {
         }
     }
 
-    func sendHealth(_ samples: [HealthSample]) {
-        guard !samples.isEmpty, state.isConnected else { return }
+    /// Returns false when there is no usable link, so the caller knows the
+    /// samples were not delivered and the sync point must not move.
+    @discardableResult
+    func sendHealth(_ samples: [HealthSample]) -> Bool {
+        guard !samples.isEmpty, state.isConnected, rxCharacteristic != nil else { return false }
         // Large batches are split so no single message monopolises the link.
         for batch in samples.chunked(into: 40) {
             send(WireProtocol.health(samples: batch))
         }
         samplesSent += samples.count
         lastSync = Date()
+        return true
     }
 
     func sendReply(to notification: BridgedNotification, text: String) {
@@ -226,6 +230,26 @@ extension BridgeLink: CBPeripheralDelegate {
             }
 
             payloadSize = peripheral.maximumWriteValueLength(for: .withResponse)
+            // The handshake waits for didUpdateNotificationStateFor. Sending it
+            // here would race the subscription: the phone could reply before
+            // this end is listening, and the welcome carrying the pairing token
+            // would be lost with no sign that anything went wrong.
+        }
+    }
+
+    nonisolated func peripheral(
+        _ peripheral: CBPeripheral,
+        didUpdateNotificationStateFor characteristic: CBCharacteristic,
+        error: Error?
+    ) {
+        Task { @MainActor in
+            guard characteristic.uuid == WireProtocol.txUUID else { return }
+            if let error {
+                state = .failed(error.localizedDescription)
+                return
+            }
+            guard characteristic.isNotifying else { return }
+            // Subscribed, so anything the phone answers will now arrive.
             send(
                 WireProtocol.hello(
                     watchName: WKInterfaceDevice.current().name,

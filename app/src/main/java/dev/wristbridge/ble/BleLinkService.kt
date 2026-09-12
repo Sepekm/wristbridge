@@ -14,6 +14,7 @@ import android.bluetooth.BluetoothGattServer
 import android.bluetooth.BluetoothGattServerCallback
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
@@ -59,8 +60,28 @@ class BleLinkService : Service() {
     private var advertiser: BluetoothLeAdvertiser? = null
     private var txCharacteristic: BluetoothGattCharacteristic? = null
 
-    /** Peers that have subscribed to TX, with their negotiated payload size. */
-    private val subscribers = Collections.synchronizedMap(HashMap<String, Int>())
+    /** Peers that have enabled notifications on the TX characteristic. */
+    private val subscribers = Collections.synchronizedSet(HashSet<String>())
+
+    /**
+     * Usable ATT payload per peer. Tracked separately from subscription because
+     * the MTU exchange and the CCCD write arrive in either order, and binding
+     * the two loses the negotiated size when the MTU lands first.
+     */
+    private val payloadSizes = Collections.synchronizedMap(HashMap<String, Int>())
+
+    /**
+     * Chunks still to go out, per peer, and the peers with one in flight.
+     *
+     * Android's stack carries a single outstanding notification at a time: the
+     * next one may only be handed over once onNotificationSent has fired. A
+     * plain loop therefore loses every chunk after the first, which at the
+     * default 20-byte MTU means losing most of every message. Guarded by
+     * [sendLock] because onNotificationSent arrives on a binder thread.
+     */
+    private val outbound = HashMap<String, ArrayDeque<ByteArray>>()
+    private val inFlight = HashSet<String>()
+    private val sendLock = Any()
 
     /**
      * Peers that have presented the pairing token. Encryption alone proves a
@@ -213,6 +234,11 @@ class BleLinkService : Service() {
                 subscribers.remove(address)
                 reassemblers.remove(address)
                 authenticated.remove(address)
+                payloadSizes.remove(address)
+                synchronized(sendLock) {
+                    outbound.remove(address)
+                    inFlight.remove(address)
+                }
                 update { it.copy(connectedWatch = null) }
             }
         }
@@ -220,7 +246,16 @@ class BleLinkService : Service() {
         override fun onMtuChanged(device: BluetoothDevice?, mtu: Int) {
             val address = device?.address ?: return
             // Three bytes of every ATT packet are header.
-            if (subscribers.containsKey(address)) subscribers[address] = mtu - 3
+            payloadSizes[address] = (mtu - 3).coerceAtLeast(DEFAULT_PAYLOAD)
+        }
+
+        override fun onNotificationSent(device: BluetoothDevice?, status: Int) {
+            val address = device?.address ?: return
+            synchronized(sendLock) { inFlight.remove(address) }
+            // Whatever the status, move on: a failed chunk has already broken
+            // this message, and stalling would wedge the queue for every later
+            // one too. The watch simply never reassembles that message.
+            pump(address)
         }
 
         @SuppressLint("MissingPermission")
@@ -261,7 +296,7 @@ class BleLinkService : Service() {
                     BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 ) == true
                 if (address != null) {
-                    if (enabling) subscribers[address] = DEFAULT_PAYLOAD else subscribers.remove(address)
+                    if (enabling) subscribers.add(address) else subscribers.remove(address)
                 }
             }
             if (responseNeeded) {
@@ -367,23 +402,66 @@ class BleLinkService : Service() {
         send(device, BleProtocol.welcome(Build.MODEL ?: "Android", token))
     }
 
-    @SuppressLint("MissingPermission")
     private fun send(device: BluetoothDevice, message: ByteArray) {
+        val address = device.address
+        val payload = payloadSizes[address] ?: DEFAULT_PAYLOAD
+        val chunks = BleProtocol.chunk(message, payload)
+
+        synchronized(sendLock) {
+            val queue = outbound.getOrPut(address) { ArrayDeque() }
+            if (queue.size + chunks.size > MAX_QUEUED_CHUNKS) {
+                // The peer has stopped acknowledging. Dropping is better than
+                // growing without bound, and the mail relay is the fallback.
+                RelayLog.record(
+                    RelayLog.Outcome.SKIPPED,
+                    "Watch link",
+                    "Dropped a message; the watch is not keeping up",
+                )
+                return
+            }
+            queue.addAll(chunks)
+        }
+        update { it.copy(messagesOut = it.messagesOut + 1) }
+        pump(address)
+    }
+
+    /**
+     * Hands the next queued chunk to the stack, if nothing is already in
+     * flight for that peer. Re-entered from onNotificationSent until the queue
+     * drains.
+     */
+    @SuppressLint("MissingPermission")
+    private fun pump(address: String) {
         val server = gattServer ?: return
         val characteristic = txCharacteristic ?: return
-        val payload = subscribers[device.address] ?: DEFAULT_PAYLOAD
+        val device = devices[address] ?: return
 
-        for (part in BleProtocol.chunk(message, payload)) {
+        val part = synchronized(sendLock) {
+            if (address in inFlight) return
+            val queue = outbound[address]
+            val next = queue?.removeFirstOrNull() ?: return
+            if (queue.isEmpty()) outbound.remove(address)
+            inFlight.add(address)
+            next
+        }
+
+        val handed = runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                server.notifyCharacteristicChanged(device, characteristic, false, part)
+                server.notifyCharacteristicChanged(device, characteristic, false, part) ==
+                    BluetoothStatusCodes.SUCCESS
             } else {
                 @Suppress("DEPRECATION")
                 characteristic.value = part
                 @Suppress("DEPRECATION")
                 server.notifyCharacteristicChanged(device, characteristic, false)
             }
+        }.getOrDefault(false)
+
+        if (!handed) {
+            // No onNotificationSent will arrive for a call the stack refused,
+            // so release the slot here or the peer would never send again.
+            synchronized(sendLock) { inFlight.remove(address) }
         }
-        update { it.copy(messagesOut = it.messagesOut + 1) }
     }
 
     /**
@@ -392,7 +470,7 @@ class BleLinkService : Service() {
      * it still needs to fall back to email.
      */
     fun broadcast(message: ByteArray): Boolean {
-        val targets = synchronized(subscribers) { subscribers.keys.toList() }
+        val targets = synchronized(subscribers) { subscribers.toList() }
         var delivered = false
         for (address in targets) {
             if (address !in authenticated) continue
@@ -446,6 +524,13 @@ class BleLinkService : Service() {
 
         /** The BLE default MTU of 23, less three bytes of ATT header. */
         private const val DEFAULT_PAYLOAD = 20
+
+        /**
+         * Roughly a dozen full-size messages at the default MTU. Past this the
+         * peer is clearly not acknowledging and queuing more only delays the
+         * fallback to mail.
+         */
+        private const val MAX_QUEUED_CHUNKS = 256
 
         val state = MutableStateFlow(LinkState())
         val observable: StateFlow<LinkState> = state

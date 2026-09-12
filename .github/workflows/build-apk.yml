@@ -1,8 +1,11 @@
 name: Build APK
 
-# Builds an installable debug APK in the cloud and attaches it to the run, so
-# you can get a working app without installing Android Studio locally.
+# Builds an installable APK in the cloud and attaches it to the run, so you can
+# get a working app without installing Android Studio locally.
 # Run it from the Actions tab, or let it fire on every push.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, master]

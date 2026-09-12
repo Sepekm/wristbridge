@@ -63,4 +63,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Android stubs out org.json in JVM unit tests, so every call throws.
+    // The real implementation makes the wire-format decoding testable.
+    testImplementation("org.json:json:20240303")
 }

@@ -34,7 +34,8 @@ fun ActivityScreen() {
         SectionCard(title = "Recent activity") {
             Hint(
                 "Live view of what the relay did, newest first. Cleared when the app " +
-                    "process restarts. Notification text is never written to disk."
+                    "process restarts. This log is held in memory and never " +
+                    "written to disk, though relayed text does of course reach Apple."
             )
             if (entries.isNotEmpty()) {
                 TextButton(onClick = RelayLog::clear) { Text("Clear") }
